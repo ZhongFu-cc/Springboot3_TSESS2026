@@ -1,0 +1,179 @@
+package tw.org.tsess.service.impl;
+
+import java.util.List;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import lombok.RequiredArgsConstructor;
+import tw.org.tsess.convert.PublishFileConvert;
+import tw.org.tsess.mapper.PublishFileMapper;
+import tw.org.tsess.pojo.DTO.addEntityDTO.AddPublishFileDTO;
+import tw.org.tsess.pojo.DTO.putEntityDTO.PutPublishFileDTO;
+import tw.org.tsess.pojo.entity.PublishFile;
+import tw.org.tsess.service.PublishFileService;
+import tw.org.tsess.utils.S3Util;
+
+/**
+ * <p>
+ * 發佈檔案表 服务实现类
+ * </p>
+ *
+ * @author Joey
+ * @since 2025-02-05
+ */
+@RequiredArgsConstructor
+@Service
+public class PublishFileServiceImpl extends ServiceImpl<PublishFileMapper, PublishFile> implements PublishFileService {
+
+	private final PublishFileConvert publishFileConvert;
+	private final String BASE_PATH = "publish-file/";
+
+	@Value("${spring.cloud.aws.s3.bucketName}")
+	private String bucketName;
+
+	private final S3Util s3Util;
+
+	@Override
+	public List<PublishFile> getFileListByGroupAndType(String group, String type) {
+		LambdaQueryWrapper<PublishFile> fileQueryWrapper = new LambdaQueryWrapper<>();
+		fileQueryWrapper.eq(PublishFile::getGroupType, group)
+				.eq(StringUtils.isNotBlank(type), PublishFile::getType, type)
+				.orderByAsc(PublishFile::getSort)
+				.orderByDesc(PublishFile::getPublishFileId);
+
+		List<PublishFile> fileList = baseMapper.selectList(fileQueryWrapper);
+
+		return fileList;
+	}
+
+	@Override
+	public IPage<PublishFile> getFilePageByGroup(String group, Page<PublishFile> pageInfo) {
+		// 查詢群組、分頁，並倒序排列
+		LambdaQueryWrapper<PublishFile> fileQueryWrapper = new LambdaQueryWrapper<>();
+		fileQueryWrapper.eq(PublishFile::getGroupType, group)
+				.orderByAsc(PublishFile::getType)
+				.orderByAsc(PublishFile::getSort)
+				.orderByDesc(PublishFile::getPublishFileId);
+		Page<PublishFile> fileList = baseMapper.selectPage(pageInfo, fileQueryWrapper);
+		return fileList;
+	}
+
+	@Override
+	public void addPublishFile(MultipartFile file, MultipartFile imgFile, AddPublishFileDTO addPublishFileDTO) {
+		PublishFile fileEntity = publishFileConvert.addDTOToEntity(addPublishFileDTO);
+
+		// 文件檔案存在，處理檔案
+		if (file != null) {
+
+			// 上傳檔案
+			String dbUrl = s3Util.upload(BASE_PATH + addPublishFileDTO.getGroupType() + "/", file.getOriginalFilename(),
+					file);
+
+			// 完整路徑放路對象中
+			fileEntity.setPath(dbUrl);
+
+		}
+
+		// 縮圖檔案存在，處理檔案
+		if (imgFile != null) {
+
+			// 上傳檔案
+			String dbUrl = s3Util.upload(BASE_PATH + addPublishFileDTO.getGroupType() + "/",
+					imgFile.getOriginalFilename(), imgFile);
+
+			// 完整路徑放入縮圖中
+			fileEntity.setCoverThumbnailUrl(dbUrl);
+
+		}
+
+		// 放入資料庫
+		baseMapper.insert(fileEntity);
+
+		System.out.println("上傳完成");
+
+	}
+
+	@Override
+	public void putPublishFile(MultipartFile file, MultipartFile imgFile, PutPublishFileDTO putPublishFileDTO) {
+
+		PublishFile fileEntity = publishFileConvert.putDTOToEntity(putPublishFileDTO);
+		PublishFile oldPublishFile = this.getById(putPublishFileDTO.getPublishFileId());
+		// 文件檔案存在，處理檔案
+		if (file != null) {
+
+			// 先刪除舊檔案
+			String oldS3Key = s3Util.extractS3PathInDbUrl(bucketName, oldPublishFile.getPath());
+			s3Util.removeFile(bucketName, oldS3Key);
+
+			// 上傳新檔案
+			String dbUrl = s3Util.upload(BASE_PATH + putPublishFileDTO.getGroupType() + "/", file.getOriginalFilename(),
+					file);
+			fileEntity.setPath(dbUrl);
+
+		}
+
+		// 縮圖檔案存在，處理檔案
+		if (imgFile != null) {
+
+			// 先刪除舊檔案
+			String oldS3Key = s3Util.extractS3PathInDbUrl(bucketName, oldPublishFile.getCoverThumbnailUrl());
+			s3Util.removeFile(bucketName, oldS3Key);
+
+			// 上傳新檔案
+			String dbUrl = s3Util.upload(BASE_PATH + putPublishFileDTO.getGroupType() + "/",
+					imgFile.getOriginalFilename(), imgFile);
+			fileEntity.setCoverThumbnailUrl(dbUrl);
+
+		}
+
+		// 更新資料庫
+		baseMapper.updateById(fileEntity);
+
+	}
+
+	@Override
+	public void deletePublishFile(Long fileId) {
+		PublishFile fileEntity = baseMapper.selectById(fileId);
+
+		// 清除檔案
+		String filePath = fileEntity.getPath();
+		// 因為縮圖圖檔URL有包含 bucketName, 這邊先進行提取
+		String s3Key = s3Util.extractS3PathInDbUrl(bucketName, filePath);
+		// 進行刪除
+		s3Util.removeFile(bucketName, s3Key);
+
+		// 如果此紀錄有縮圖檔案,也要一起刪掉
+		if (fileEntity.getCoverThumbnailUrl() != null) {
+
+			// 提取S3 Key
+			String thumbnailS3Key = s3Util.extractS3PathInDbUrl(bucketName, fileEntity.getCoverThumbnailUrl());
+
+			// 進行刪除
+			s3Util.removeFile(bucketName, thumbnailS3Key);
+		}
+
+		// 資料庫資料刪除
+		baseMapper.deleteById(fileId);
+
+	}
+
+	@Override
+	public void deletePublishFile(List<Long> fileIdList) {
+		// 遍歷循環刪除
+		for (Long fileId : fileIdList) {
+			// 去執行單個刪除
+			this.deletePublishFile(fileId);
+
+		}
+
+	}
+
+}

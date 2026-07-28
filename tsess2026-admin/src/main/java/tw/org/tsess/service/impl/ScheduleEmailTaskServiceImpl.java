@@ -1,0 +1,291 @@
+package tw.org.tsess.service.impl;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
+import org.apache.commons.lang3.StringUtils;
+import org.redisson.api.RAtomicLong;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import lombok.RequiredArgsConstructor;
+import tw.org.tsess.convert.ScheduleEmailTaskConvert;
+import tw.org.tsess.enums.ScheduleEmailStatus;
+import tw.org.tsess.exception.EmailException;
+import tw.org.tsess.exception.ScheduleEmailTaskException;
+import tw.org.tsess.mapper.ScheduleEmailTaskMapper;
+import tw.org.tsess.pojo.DTO.SendEmailDTO;
+import tw.org.tsess.pojo.entity.ScheduleEmailRecord;
+import tw.org.tsess.pojo.entity.ScheduleEmailTask;
+import tw.org.tsess.service.ScheduleEmailRecordService;
+import tw.org.tsess.service.ScheduleEmailTaskService;
+
+/**
+ * <p>
+ * 排程的電子郵件任務 服务实现类
+ * </p>
+ *
+ * @author Joey
+ * @since 2025-08-27
+ */
+@Service
+@RequiredArgsConstructor
+public class ScheduleEmailTaskServiceImpl extends ServiceImpl<ScheduleEmailTaskMapper, ScheduleEmailTask>
+		implements ScheduleEmailTaskService {
+
+	private static final String DAILY_EMAIL_QUOTA_KEY = "email:dailyQuota";
+
+	//redLockClient01  businessRedissonClient
+	@Qualifier("businessRedissonClient")
+	private final RedissonClient redissonClient;
+	private final ScheduleEmailTaskConvert scheduleEmailTaskConvert;
+	private final ScheduleEmailRecordService scheduleEmailRecordService;
+
+	@Override
+	public ScheduleEmailTask getScheduleEmailTask(Long id) {
+		ScheduleEmailTask scheduleEmailTask = baseMapper.selectById(id);
+		return scheduleEmailTask;
+	}
+
+	@Override
+	public List<ScheduleEmailTask> getScheduleEmailTaskList() {
+		List<ScheduleEmailTask> scheduleEmailTaskList = baseMapper.selectList(null);
+		return scheduleEmailTaskList;
+	}
+
+	@Override
+	public int getPendingExpectedEmailVolumeByToday() {
+
+		// 1.拿取今日的時間
+		LocalDateTime today = LocalDateTime.now();
+
+		// 2.將今日時間當作參數,拿到今日所有Pending任務
+		List<ScheduleEmailTask> targetDayTaskList = this.getPendingEmailTaskListByDate(today);
+
+		// 3.預設pending任務的寄信量為0
+		int pendingExpectedEmailVolume = 0;
+
+		// 4.循環加總已有任務信件量
+		for (ScheduleEmailTask task : targetDayTaskList) {
+			pendingExpectedEmailVolume = pendingExpectedEmailVolume + task.getExpectedEmailVolume();
+		}
+
+		// 5.返回今日預計要寄出的信件量
+		return pendingExpectedEmailVolume;
+	}
+
+	@Override
+	public List<ScheduleEmailTask> getProcessDueTasks() {
+		// 1.拿取當前的時間
+		LocalDateTime now = LocalDateTime.now();
+
+		// 2.拿到已經該執行卻沒有執行的任務
+		LambdaQueryWrapper<ScheduleEmailTask> scheduleEmailTaskWrapper = new LambdaQueryWrapper<>();
+		scheduleEmailTaskWrapper.le(ScheduleEmailTask::getStartTime, now)
+				.eq(ScheduleEmailTask::getStatus, ScheduleEmailStatus.PENDING.getValue());
+		List<ScheduleEmailTask> scheduleEmailTaskList = baseMapper.selectList(scheduleEmailTaskWrapper);
+
+		return scheduleEmailTaskList;
+	}
+
+	@Override
+	public IPage<ScheduleEmailTask> getScheduleEmailTaskPage(String recipientCategory, Integer status,
+			Page<ScheduleEmailTask> page) {
+		LambdaQueryWrapper<ScheduleEmailTask> scheduleEmailTaskWrapper = new LambdaQueryWrapper<>();
+		scheduleEmailTaskWrapper
+				.eq(StringUtils.isNotBlank(recipientCategory), ScheduleEmailTask::getRecipientCategory,
+						recipientCategory)
+				.eq(status != null, ScheduleEmailTask::getStatus, status);
+
+		Page<ScheduleEmailTask> scheduleEmailTaskPage = baseMapper.selectPage(page, scheduleEmailTaskWrapper);
+		return scheduleEmailTaskPage;
+	}
+
+	@Override
+	public Long addScheduleEmailTask(ScheduleEmailTask scheduleEmailTask) {
+
+		// 1.獲取DB中在這個時間內其他Pending 的任務
+		List<ScheduleEmailTask> pendingEmailTaskList = this
+				.getPendingEmailTaskListByDate(scheduleEmailTask.getStartTime());
+
+		// 2.信件日額度為300，如果排程日期是今天,則要改為使用今日剩餘額
+		long dailyEmailQuota = 300L;
+		if (LocalDate.now().isEqual(scheduleEmailTask.getStartTime().toLocalDate())) {
+			//從Redis中查看本日信件餘額
+			RAtomicLong quota = redissonClient.getAtomicLong(DAILY_EMAIL_QUOTA_KEY);
+			dailyEmailQuota = quota.get();
+		}
+
+		System.out.println("剩餘額度為 " + dailyEmailQuota);
+
+		dailyEmailQuota = dailyEmailQuota - scheduleEmailTask.getExpectedEmailVolume();
+
+		// 3.之後再減去預計目標日期，要執行的信件數量
+		for (ScheduleEmailTask task : pendingEmailTaskList) {
+			//減去目前已經有的
+			dailyEmailQuota = dailyEmailQuota - task.getExpectedEmailVolume();
+		}
+
+		// 4.如果沒有信件額度返回異常，不進行信件任務排程
+		if (dailyEmailQuota < 0) {
+			throw new EmailException(
+					"目標任務時間" + scheduleEmailTask.getStartTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+							+ "已經無足夠信件額度可以寄信，請更換時間");
+		}
+
+		// 5.將任務新增進DB
+		baseMapper.insert(scheduleEmailTask);
+		return scheduleEmailTask.getScheduleEmailTaskId();
+	}
+
+	public <T> void processScheduleEmailTask(SendEmailDTO sendEmailDTO, List<T> recipients, String recipientCategory,
+			Function<T, String> emailExtractor, BiFunction<String, T, String> contentReplacer) {
+
+		// 1. 建立排程任務
+		ScheduleEmailTask scheduleEmailTask = scheduleEmailTaskConvert.DTOToEntity(sendEmailDTO);
+		scheduleEmailTask.setExpectedEmailVolume(recipients.size());
+		scheduleEmailTask.setRecipientCategory(recipientCategory);
+
+		Long scheduleEmailTaskId = this.addScheduleEmailTask(scheduleEmailTask);
+
+		// 2. 逐筆建立紀錄
+		for (T recipient : recipients) {
+			String htmlContent = contentReplacer.apply(sendEmailDTO.getHtmlContent(), recipient);
+			String plainText = contentReplacer.apply(sendEmailDTO.getPlainText(), recipient);
+
+			ScheduleEmailRecord record = new ScheduleEmailRecord();
+			record.setHtmlContent(htmlContent);
+			record.setPlainText(plainText);
+			record.setScheduleEmailTaskId(scheduleEmailTaskId);
+			record.setRecipientCategory(recipientCategory);
+			record.setStatus(ScheduleEmailStatus.PENDING.getValue());
+
+			// 測試信件 vs 真實 Email
+			if (sendEmailDTO.getIsTest()) {
+				record.setEmail(sendEmailDTO.getTestEmail());
+			} else {
+				record.setEmail(emailExtractor.apply(recipient));
+			}
+
+			scheduleEmailRecordService.addScheduleEmailRecord(record);
+		}
+	}
+
+	@Override
+	public <T> void processScheduleEmailTask(SendEmailDTO sendEmailDTO, List<T> recipients, String recipientCategory,
+			Function<T, String> emailExtractor, BiFunction<String, T, String> contentReplacer,
+			Function<T, List<String>> attachmentPathProvider) {
+		// 1. 建立排程任務
+		ScheduleEmailTask scheduleEmailTask = scheduleEmailTaskConvert.DTOToEntity(sendEmailDTO);
+		scheduleEmailTask.setExpectedEmailVolume(recipients.size());
+		scheduleEmailTask.setRecipientCategory(recipientCategory);
+
+		Long scheduleEmailTaskId = this.addScheduleEmailTask(scheduleEmailTask);
+
+		// 2. 逐筆建立紀錄
+		for (T recipient : recipients) {
+			String htmlContent = contentReplacer.apply(sendEmailDTO.getHtmlContent(), recipient);
+			String plainText = contentReplacer.apply(sendEmailDTO.getPlainText(), recipient);
+
+			ScheduleEmailRecord record = new ScheduleEmailRecord();
+			record.setHtmlContent(htmlContent);
+			record.setPlainText(plainText);
+			record.setScheduleEmailTaskId(scheduleEmailTaskId);
+			record.setRecipientCategory(recipientCategory);
+			record.setStatus(ScheduleEmailStatus.PENDING.getValue());
+
+			// 測試信件 vs 真實 Email
+			if (sendEmailDTO.getIsTest()) {
+				record.setEmail(sendEmailDTO.getTestEmail());
+			} else {
+				record.setEmail(emailExtractor.apply(recipient));
+			}
+
+			// 3. 查詢附件（判斷是否需要附件），並取得附件的路徑列表
+			if (sendEmailDTO.getIncludeOfficialAttachment() && attachmentPathProvider != null) {
+				List<String> attachmentsPath = attachmentPathProvider.apply(recipient);
+				// 移除 null 或空白字串
+				attachmentsPath.removeIf(path -> path == null || path.isBlank());
+				// 將List轉變成以 , 號分隔的字串
+				String attachmentsStringPath = String.join(",", attachmentsPath);
+				record.setAttachmentsPath(attachmentsStringPath);
+			}
+
+			// 4.將這則紀錄放進DB中
+			scheduleEmailRecordService.addScheduleEmailRecord(record);
+		}
+
+	}
+
+	/**
+	 * 根據日期，獲取Pending狀態的任務
+	 * 
+	 * @param date
+	 * @return
+	 */
+	private List<ScheduleEmailTask> getPendingEmailTaskListByDate(LocalDateTime date) {
+		// 1.截斷 任務時間 那天的開始時間
+		LocalDateTime startOfDay = date.truncatedTo(ChronoUnit.DAYS); // 2025-08-07 00:00:00
+
+		System.out.println("排程任務當天一早 " + startOfDay);
+
+		// 2.加一天再減1秒得到當天結束
+		LocalDateTime endOfDay = startOfDay.plusDays(1).minusSeconds(1); // 2025-08-07 23:59:59
+
+		System.out.println("排程任務當天結束 " + endOfDay);
+
+		// 3.取出狀態為 pending 且執行日期與當前任務相同的資料
+		LambdaQueryWrapper<ScheduleEmailTask> scheduleEmailTaskWrapper = new LambdaQueryWrapper<>();
+		scheduleEmailTaskWrapper.eq(ScheduleEmailTask::getStatus, ScheduleEmailStatus.PENDING.getValue())
+				.between(ScheduleEmailTask::getStartTime, startOfDay, endOfDay);
+		return baseMapper.selectList(scheduleEmailTaskWrapper);
+	}
+
+	@Override
+	public void deleteScheduleEmailTask(Long scheduleEmailTaskId) {
+		baseMapper.deleteById(scheduleEmailTaskId);
+	}
+
+	@Override
+	public void cancelScheduleEmailTask(Long scheduleEmailTaskId) {
+		// 1.查詢資料
+		ScheduleEmailTask scheduleEmailTask = baseMapper.selectById(scheduleEmailTaskId);
+
+		// 2.如果任務狀態目前為Pending,則將它修改成canceled
+		if (scheduleEmailTask.getStatus() == ScheduleEmailStatus.PENDING.getValue()) {
+
+			// 修改狀態並更新
+			scheduleEmailTask.setStatus(ScheduleEmailStatus.CANCELED.getValue());
+			baseMapper.updateById(scheduleEmailTask);
+
+			// 找到此任務的紀錄,將他們的狀態都改為canceled
+			List<ScheduleEmailRecord> taskRecords = this.getTaskRecordsBytaskId(scheduleEmailTaskId);
+			taskRecords.forEach(record -> record.setStatus(ScheduleEmailStatus.CANCELED.getValue()));
+			scheduleEmailRecordService.saveOrUpdateBatch(taskRecords);
+			
+			return;
+
+		}
+
+		// 如果不是Pending狀態,其他狀態都不接受取消
+		throw new ScheduleEmailTaskException("當前任務狀態不接受取消");
+
+	}
+
+	@Override
+	public List<ScheduleEmailRecord> getTaskRecordsBytaskId(Long scheduleEmailTaskId) {
+		return scheduleEmailRecordService.getScheduleEmailRecordListByTaskId(scheduleEmailTaskId);
+	}
+
+}

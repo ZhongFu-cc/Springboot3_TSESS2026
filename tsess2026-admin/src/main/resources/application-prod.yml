@@ -1,0 +1,358 @@
+
+server:
+  tomcat:
+    # TCP 連線建立後，等待 request header 的時間上限
+    connection-timeout: 60000
+    # 同一 TCP 連線最多可處理多少個 HTTP request,-1為不限制
+    #    max-keep-alive-requests: -1
+    threads:
+      max: 500         # 最大工作執行緒
+      min-spare: 50    # 保留閒置執行緒
+    accept-count: 300  # 排隊連線數
+spring:
+  servlet:
+    multipart:
+      # 單個檔案最大接受3GB，整份Post請求最大接受3GB，記得搭配Nginx去限制檔案大小
+      max-file-size: 3GB
+      max-request-size: 3GB
+  mvc:
+    async:
+      # 設置為30分鐘，這邊1800000是毫秒，此為異步Controller 任務的處理超時時間
+      request-timeout: 1800000
+  # i18n 語言,根據瀏覽器傳來的accept-language決定使用哪個語言
+  messages:
+    basename: messages              # 對應 classpath 下的 messages_*.properties
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  # 配置Json的日期格式
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+  # 配置數據源信息
+  datasource:
+    # 配置數據源類型,使用SpringBoot3 預設的連接持數據源,hikari
+    type: com.zaxxer.hikari.HikariDataSource
+    # 配置連接數據庫的各個信息
+    driver-class-name: org.mariadb.jdbc.Driver
+    # 配置URL,mysql8.0剛出時不配置?serverTimezone=Asia/Taipei,會報啟動錯誤
+    # 現在好像解決了
+    url: jdbc:mariadb://localhost:3306/tsess2026_international_conference?rewriteBatchedStatements=true
+    # 配置連接用戶
+    username: ${DB_USER}
+    # 配置用戶密碼
+    password: ${DB_PASSWORD}
+    #hikari:
+
+  mail:
+    # host: smtp.gmail.com
+    host: smtp-relay.brevo.com
+    port: 587
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  cloud:
+    aws:
+      region:
+        # MinIO 通常不需要真实的 AWS Region，但需要设置一个占位符
+        static: us-east-1
+      credentials:
+        # MinIO 的 Access Key
+        access-key: ${MINIO_ACCESS_KEY}
+        # MinIO 的 Secret Key
+        secret-key: ${MINIO_SECRET_KEY}
+      s3:
+        # !!! 关键配置 !!!
+        # 指向您的 MinIO 服务地址和 API 端口 (默认通常是 9000)
+        endpoint: http://localhost:9000
+        bucketName: tsess
+        # MinIO 强制使用 Path Style 路径，这通常是 S3 兼容服务所需要的
+        path-style-access-enabled: true
+
+
+mybatis-plus:
+  # 說明:mybatis3後使用mapperLocations, XML路徑掃描配置,預設為classpath*:/mapper/**/*.xml
+  # 說明:多模塊項目的掃描路徑得以classpath*:開頭
+  # mapperLocations: classpath*:/mapper/**/*.xml
+
+  # 說明:typeAliases-package: 設定別名掃描包,通常用於掃描單表的實體類,但因繼承BaseMapper這很少用
+  # 以這個範例項目為例,他應該是這個包下,預設所有實體類的類名(不區分大小寫)為別名
+  typeAliasesPackage: tw.org.tsess.pojo.entity
+  # 配置設定
+  configuration:
+    # 配置輸出日誌-方便查看SQL語句
+    #    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 延遲加載的全局開關,當開啟時,所有關聯對象都會延遲加載
+    # lazyLoadingEnabled默認為false
+    lazyLoadingEnabled: true
+    # 當開啟時,任何方法的調用都會加載該對象的所有屬性,否則每個屬性會按須加載
+    # mybatis 3.4.1以後默認都是false
+    aggressiveLazyLoading: false
+
+
+# Redisson配置,需要搭配Config配置類使用,
+# 不使用全部使用yml自動配置是因為,當今天有需要業務redis , 分布式鎖redis , redis 集群之類的,手動配置更好實現
+redisson:
+  address: "redis://localhost:6379"
+  #  password: "yourpassword"  # 如果有密码的话
+  database: 0
+
+
+    #  # redis key前缀
+    #  keyPrefix:
+    #  # 线程池数量
+    #  threads: 4
+    #  # Netty线程池数量
+    #  nettyThreads: 8
+    #  # 单节点配置
+    #  singleServerConfig:
+    #    # 客户端名称
+    #    clientName: "Joey"
+    #    # 最小空闲连接数
+    #    connectionMinimumIdleSize: 8
+    #    # 连接池大小
+    #    connectionPoolSize: 32
+    #    # 连接空闲超时，单位：毫秒
+    #    idleConnectionTimeout: 10000
+    #    # 命令等待超时，单位：毫秒
+    #    timeout: 3000
+    #    # 发布和订阅连接池大小
+    #    subscriptionConnectionPoolSize: 50
+    #    # 数据库编号
+    #    database: 2
+
+
+
+############## Sa-Token 配置 (文档: https://sa-token.cc) ##############
+sa-token:
+  #Token前缀 与 Token值 之间必须有一个空格。
+  #一旦配置了 Token前缀，则前端提交 Token 时，必须带有前缀，否则会导致框架无法读取 Token。
+  #也就是說前端header傳來必須是以下格式
+  #  請求key:   Authorization
+  #  請求value: Bearer db69ded6-59e8-43f1-8984-788b560e62ad
+  #由于Cookie中无法存储空格字符，也就意味配置 Token 前缀后，Cookie 鉴权方式将会失效，此时只能将 Token 提交到header里进行传输。
+  #設定前墜特別適合拿來驗證後端是使用cookie驗證還是請求頭中的token驗證
+  token-prefix: Bearer
+
+  # token 名称（同时也是 cookie 名称,可自定義）
+  token-name: Authorization
+  # token 有效期（单位：秒） 默认30天，-1 代表永久有效,我改為一天 86400秒
+  timeout: 86400
+  # token 最低活跃频率（单位：秒），如果 token 超过此时间没有访问系统就会被冻结，默认-1 代表不限制，永不冻结
+  active-timeout: -1
+  # 是否允许同一账号多地同时登录 （为 true 时允许一起登录, 为 false 时新登录挤掉旧登录）
+  is-concurrent: true
+  # 在多人登录同一账号时，是否共用一个 token （为 true 时所有登录共用一个 token, 为 false 时每次登录新建一个 token）
+  is-share: true
+  # token 风格（默认可取值：uuid、simple-uuid、random-32、random-64、random-128、tik）
+  token-style: uuid
+  # 是否输出操作日志
+  is-log: true
+
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    #  文檔群組名all, 匹配路徑為根路徑任意開頭映射路徑(Controller),掃描包為com.example
+    - group: 'all'
+      paths-to-match: '/**'
+      # 掃描包  tw.org.organ
+      packages-to-scan: tw.org.tsess
+
+      #  文檔群組名為owner, 表示這個是給Member用戶使用的API
+    - group: 'owner'
+      paths-to-match: '/*/owner/**'
+      # 掃描包  tw.org.organ
+      packages-to-scan: tw.org.tsess
+
+      #  文檔群組名為admin, 表示這個是給管理者使用的，具有權限的狀態下,拿table Id 可以訪問所有數據
+    - group: 'admin'
+      # 這邊注意我是使用exclude 對某個路徑進行排除
+      paths-to-exclude: '/*/owner/**'
+      # 掃描包  tw.org.organ
+      packages-to-scan: tw.org.tsess
+
+
+#      #  以下為多個model的Controller層文檔分層,有需要再開啟
+#      #  文檔群組名common, 匹配路徑為common開頭的任意映射路徑(Controller),掃描包為com.example
+#    - group: 'common'
+#      paths-to-match: '/common/**'
+#      packages-to-scan: com.example
+#      #文檔群組名goods, 匹配路徑為goods開頭的任意映射路徑(Controller),掃描包為com.example
+#    - group: 'goods'
+#      paths-to-match: '/goods/**'
+#      packages-to-scan: com.example
+
+#使用knife4j強化的API文檔介面,只要訪問ip:port/doc.html即可
+knife4j:
+  enable: false
+  setting:
+    language: zh_cn
+
+
+# 自定義，minio 分布式文件儲存服務,因為沒有實現的starter所以這邊配置主要是獲取屬性值而已
+minio:
+  #minio服務所在地址,這個指的是server不是控制台
+  endpoint: http://localhost:9000
+  #預設儲存桶名稱,這是為了避免上傳時沒選定Bucket造成錯誤
+  bucketName: ${MINIO_BUCKET_NAME}
+  #訪問的key,預設是帳號,除非有去特別設置Access key
+  accessKey: ${MINIO_ACCESS_KEY}
+  #訪問的密鑰,預設是密碼,除非有去特別設置Access key
+  secretKey: ${MINIO_SECRET_KEY}
+
+
+
+# 自定義，專案相關
+project:
+  # 專案域名
+  domain: https://tsess.org.tw
+  # 活動名稱
+  name: TSESS 2026
+  # 活動名稱縮寫/別名
+  alias: tsess2026
+  # 語言，可選值zh_TW / en ，用於選擇中文信zh_TW 或 英文信en
+  language: en
+  # Banner 圖片
+  banner-url: https://tsess.org.tw/img/banner.jpg
+  # 群組相關，與一次寄送 email 數量有關
+  group-size: 200
+  # 報名模式，可選值: FREE / PREPAID / POSTPAID ，POSTPAID尚未實現
+  mode: POSTPAID
+
+  # email 相關
+  email:
+    # 寄件人信箱 (自定義domain 需搭配 spring.mail.* 使用 + brevo STMP ,才有效果)
+    # Gmail的話可以直接填進from , 讓寄信和收信的信箱相同
+    from: notify@tsess.org.tw
+    # 寄件人顯示名稱
+    from-name: TSESS 2026 Notification
+    # 回覆信箱
+    reply-to: tsess106@gmail.com
+    # 付款相關
+  payment:
+    # 付款後客戶返回的頁面
+    client-back-url: https://tsess.org.tw/member
+    # 付款後，金流系統返回結果的頁面，prod-api 為生產環境的判斷詞墜
+    return-url: https://tsess.org.tw/prod-api/payment
+    # 廠商訂單編號前墜,最多9碼,超過會被截斷
+    prefix: tsess
+
+  # 註冊費相關
+  # 註冊費美金匯率(Long) , 32為 1美金 : 32台幣 , 不可小於0
+  rate: 32
+  # 團體註冊費折扣(Double) , 0.9為9折 , 1.0為不打折 ,不可小於0
+  group-discount: 0.9
+  # 註冊費 (寫台幣 , 轉換美金時會根據上方的rate 去做轉換)
+  registration-fee:
+    # 第一階段早鳥
+    early-bird-phase1:
+      # 第一階段早鳥，台灣人
+      taiwan:
+        # 要與 MemberCategoryEnum 的configKey對應，不能亂寫
+        member: 700
+        others: 600
+        non-member: 1000
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+      # 第一階段早鳥，外國人
+      foreign:
+        member: 9600
+        others: 4800
+        non-member: 12800
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+    # 第二階段早鳥
+    early-bird-phase2:
+      # 第二階段早鳥，台灣人
+      taiwan:
+        member: 700
+        others: 600
+        non-member: 1000
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+      # 第二階段早鳥，外國人
+      foreign:
+        member: 9600
+        others: 4800
+        non-member: 12800
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+    # 第三階段早鳥
+    early-bird-phase3:
+      # 第三階段早鳥，台灣人
+      taiwan:
+        member: 700
+        others: 600
+        non-member: 1000
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+      # 第三階段早鳥，外國人
+      foreign:
+        member: 9600
+        others: 4800
+        non-member: 12800
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+    # 一般階段
+    regular:
+      # 一般階段，台灣人
+      taiwan:
+        member: 1000
+        others: 1200
+        non-member: 1500
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+      # 一般階段，外國人
+      foreign:
+        member: 12800
+        others: 6400
+        non-member: 16000
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+    # 現場報名
+    on-site:
+      # 現場報名，台灣人
+      taiwan:
+        member: 1500
+        others: 1800
+        non-member: 2000
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+      # 現場報名，外國人
+      foreign:
+        member: 12800
+        others: 6400
+        non-member: 16000
+        mvp: 0
+        speaker: 0
+        moderator: 0
+        staff: 0
+

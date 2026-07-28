@@ -1,0 +1,116 @@
+package tw.org.tsess.service.impl;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
+import lombok.RequiredArgsConstructor;
+import tw.org.tsess.service.CmsService;
+import tw.org.tsess.utils.JsoupUtil;
+import tw.org.tsess.utils.S3Util;
+
+@RequiredArgsConstructor
+@Service
+public class CmsServiceImpl implements CmsService {
+
+	private final S3Util s3Util;
+
+	@Override
+	public void cleanNotUsedImg(String newHtml, String oldHtml, List<String> tempUploadUrl, String bucketName) {
+		// 透過封裝的JsoupUtil 提取 img標籤內的src屬性,變成一個URL List
+		List<String> contentImageUrls = JsoupUtil.extractImageUrls(newHtml);
+
+		// 透過封裝的JsoupUtil 提取原本HTML內容 img標籤內的src屬性,變成一個URL List
+		List<String> originalImageUrls = JsoupUtil.extractImageUrls(oldHtml);
+
+		// 過濾出那些在 originalImageUrls 中存在，但不在 contentImageUrls 中的 URL。
+		List<String> unUsedContentImg = originalImageUrls.stream()
+				.filter(url -> !contentImageUrls.contains(url))
+				.collect(Collectors.toList());
+
+		// 因為在圖片路徑是含http協議和域名的,所以這邊要進行提取
+		List<String> unUsedS3Keys = s3Util.extractPaths(bucketName, unUsedContentImg);
+
+		System.out.println("要移除的舊路徑" + unUsedS3Keys);
+
+		// 移除S3中的圖片
+		s3Util.removeFiles(bucketName, unUsedS3Keys);
+
+		// ----------------------處理臨時文件-----------------------------------
+		// 過濾出那些在 tempUploadUrl 中存在，但不在 contentImageUrls 中的 URL。
+		List<String> unUsedTempImgs = tempUploadUrl.stream()
+				.filter(url -> !contentImageUrls.contains(url))
+				.collect(Collectors.toList());
+
+		// 因為在圖片路徑是含http協議和域名的,所以這邊要進行提取
+		List<String> unUsedTempS3Keys = s3Util.extractPaths(bucketName, unUsedTempImgs);
+
+		System.out.println("要移除的臨時文件路徑" + unUsedTempS3Keys);
+
+		// 移除S3中的圖片
+		s3Util.removeFiles(bucketName, unUsedTempS3Keys);
+
+	}
+
+	@Override
+	public void cleanNotUsedImg(String newHtml, String oldHtml, String asyncArticelHtml, List<String> tempUploadUrl,
+			String bucketName) {
+		// 透過封裝的JsoupUtil 提取 img標籤內的src屬性,變成一個URL List
+		List<String> contentImageUrls = JsoupUtil.extractImageUrls(newHtml);
+
+		// 透過封裝的JsoupUtil 提取原本HTML內容 img標籤內的src屬性,變成一個URL List
+		List<String> originalImageUrls = JsoupUtil.extractImageUrls(oldHtml);
+
+		// 透過封裝的JsoupUtil 提取同步文章的HTML內容 img標籤內的src屬性,變成一個URL List
+		List<String> asyncImageUrls = JsoupUtil.extractImageUrls(asyncArticelHtml);
+
+		// 透過originalImageUrls創建一個新的 List 来儲存結果
+		List<String> unUsedContentImg = new ArrayList<>(originalImageUrls);
+
+		// 從 urlsToRemove 中移除所有在 contentImageUrls 中存在的 URL
+		unUsedContentImg.removeAll(contentImageUrls);
+
+		// 從 urlsToRemove 中移除所有在 asyncImageUrls 中存在的 URL
+		unUsedContentImg.removeAll(asyncImageUrls);
+
+		// 因為在圖片路徑是含http協議和域名的,所以這邊要進行提取
+		List<String> unUsedS3Keys = s3Util.extractPaths(bucketName, unUsedContentImg);
+
+		System.out.println("保留新內容和同步文章的圖片，要移除的舊圖片路徑有:" + unUsedS3Keys);
+
+		// 移除S3中的圖片
+		s3Util.removeFiles(bucketName, unUsedS3Keys);
+
+		// ----------------------處理臨時文件-----------------------------------
+		// 過濾出那些在 tempUploadUrl 中存在，但不在 contentImageUrls 中的 URL。
+		List<String> unUsedTempImgs = tempUploadUrl.stream()
+				.filter(url -> !contentImageUrls.contains(url))
+				.collect(Collectors.toList());
+
+		// 因為在圖片路徑是含http協議和域名的,所以這邊要進行提取
+		List<String> unUsedTempS3Keys = s3Util.extractPaths(bucketName, unUsedTempImgs);
+
+		System.out.println("要移除的臨時文件路徑:" + unUsedTempS3Keys);
+
+		// 移除S3中的圖片
+		s3Util.removeFiles(bucketName, unUsedTempS3Keys);
+
+	}
+
+	@Override
+	public void cleanNotUsedImg(String oldHtml, String bucketName) {
+		// 透過封裝的JsoupUtil 提取原本HTML內容 img標籤內的src屬性,變成一個URL List
+		List<String> originalImageUrls = JsoupUtil.extractImageUrls(oldHtml);
+
+		// 因為在圖片路徑是含http協議和域名的,所以這邊要進行提取
+		List<String> unUsedS3Keys = s3Util.extractPaths(bucketName, originalImageUrls);
+
+		// 移除S3中的圖片
+		s3Util.removeFiles(bucketName, unUsedS3Keys);
+		;
+
+	}
+
+}

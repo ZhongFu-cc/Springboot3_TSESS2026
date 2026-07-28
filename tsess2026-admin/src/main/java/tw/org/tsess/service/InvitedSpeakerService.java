@@ -1,0 +1,106 @@
+package tw.org.tsess.service;
+
+import java.util.List;
+
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.IService;
+
+import jakarta.validation.Valid;
+import tw.org.tsess.pojo.DTO.addEntityDTO.AddInvitedSpeakerDTO;
+import tw.org.tsess.pojo.DTO.putEntityDTO.PutInvitedSpeakerDTO;
+import tw.org.tsess.pojo.entity.InvitedSpeaker;
+import tw.org.tsess.pojo.entity.Member;
+
+/**
+ * <p>
+ * 受邀請的講者，可能是講者，可能是座長 服务类
+ * </p>
+ *
+ * @author Joey
+ * @since 2025-04-23
+ */
+@Validated
+public interface InvitedSpeakerService extends IService<InvitedSpeaker> {
+
+	/**
+	 * 根據ID，獲取invitedSpeaker
+	 * 
+	 * @param id
+	 * @return
+	 */
+	InvitedSpeaker getInvitedSpeaker(Long id);
+
+	/**
+	 * 獲取所有invitedSpeaker
+	 * 
+	 * @return
+	 */
+	List<InvitedSpeaker> getAllInvitedSpeaker();
+
+	/**
+	 * 獲取所有invitedSpeaker(分頁)
+	 * 
+	 * @param page 分頁資訊
+	 * @return
+	 */
+	IPage<InvitedSpeaker> getInvitedSpeakerPage(Page<InvitedSpeaker> page);
+	
+	/**
+	 * 根據查詢字串，獲取所有invitedSpeaker(分頁)
+	 * 
+	 * @param page 分頁資訊
+	 * @param queryText 模糊查詢字串
+	 * @return
+	 */
+	IPage<InvitedSpeaker> getInvitedSpeakerPage(Page<InvitedSpeaker> page,String queryText);
+
+	/**
+	 * 會員新增時,新增invitedSpeaker (受邀講者)
+	 * 
+	 * @param member 會員資訊
+	 */
+	void addInviredSpeaker(Member member);
+	
+	/**
+	 * 新增 invitedSpeaker (受邀講者)，當有不是Speaker身分要放入時使用
+	 * 
+	 * @param file                 圖檔
+	 * @param addInvitedSpeakerDTO 講者資訊
+	 */
+	void addInvitedSpeaker(MultipartFile file, @Valid AddInvitedSpeakerDTO addInvitedSpeakerDTO);
+	
+	/**
+	 * 講者 自行更新 invitedSpeaker (自己的資料)
+	 * 
+	 * @param file
+	 * @param putInvitedSpeakerDTO
+	 */
+	void updateInvitedSpeakerHimself(MultipartFile file, @Valid PutInvitedSpeakerDTO putInvitedSpeakerDTO);
+	
+	/**
+	 * 更新 invitedSpeaker (受邀講者)
+	 * 
+	 * @param file                 圖檔
+	 * @param putInvitedSpeakerDTO 講者資訊
+	 */
+	void updateInvitedSpeaker(MultipartFile file, @Valid PutInvitedSpeakerDTO putInvitedSpeakerDTO);
+
+	/**
+	 * 根據ID，刪除invitedSpeaker
+	 * 
+	 * @param id
+	 */
+	void deleteInvitedSpeaker(Long id);
+
+	/**
+	 * 根據ID列表，刪除invitedSpeakers
+	 * 
+	 * @param ids
+	 */
+	void deleteInvitedSpeakerList(List<Long> ids);
+
+}

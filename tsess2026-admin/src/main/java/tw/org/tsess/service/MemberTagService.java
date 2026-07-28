@@ -1,0 +1,127 @@
+package tw.org.tsess.service;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import com.baomidou.mybatisplus.extension.service.IService;
+
+import tw.org.tsess.pojo.entity.Member;
+import tw.org.tsess.pojo.entity.MemberTag;
+import tw.org.tsess.pojo.entity.Tag;
+
+/**
+ * <p>
+ * member表 和 tag表的關聯表 服务类
+ * </p>
+ *
+ * @author Joey
+ * @since 2025-01-23
+ */
+public interface MemberTagService extends IService<MemberTag> {
+
+	/**
+	 * 根據 memberId 查詢與之有關tagIds關聯
+	 * 
+	 * @param memberId
+	 * @return
+	 */
+	Set<Long> getTagIdsByMemberId(Long memberId);
+	
+	/**
+	 * 根據 memberId 查詢與之有關的所有MemberTag關聯
+	 * 
+	 * @param memberId
+	 * @return
+	 */
+	List<MemberTag> getMemberTagByMemberId(Long memberId);
+
+	/**
+	 * 根據 tagId 查詢與之有關的所有MemberTag關聯
+	 * 
+	 * @param tagId
+	 * @return
+	 */
+	List<MemberTag> getMemberTagByTagId(Long tagId);
+
+	/**
+	 * 根據 memberId 集合， 查詢與之有關的所有MemberTag關聯
+	 * 
+	 * @param memberIds
+	 * @return
+	 */
+	List<MemberTag> getMemberTagByMemberIds(Collection<Long> memberIds);
+	
+	/**
+	 * 根據 memberIds 獲取稿件中具有的tag , 以memberId為鍵,tagList為值的方式返回
+	 * 
+	 * @param memberIds
+	 * @return key 為 memberId , value 為tagList
+	 */
+	Map<Long, List<Tag>> groupTagsByMemberId(Collection<Long> memberIds);
+	
+	/**
+	 * 根據 memberIds 獲取稿件中具有的tag , 以memberId為鍵,tagList為值的方式返回
+	 * 
+	 * @param members
+	 * @return key 為 memberId , value 為tagList
+	 */
+	Map<Long, List<Tag>> groupTagsByMemberId(List<Member> members);
+
+	/**
+	 * 根據 tagIds 集合， 查詢與之有關的所有MemberTag關聯
+	 * 
+	 * @param tagIds
+	 * @return
+	 */
+	List<MemberTag> getMemberTagByTagIds(Collection<Long> tagIds);
+
+	/**
+	 * 為一個tag和member新增關聯
+	 * 
+	 * @param memberTag
+	 */
+	void addMemberTag(MemberTag memberTag);
+	
+	/**
+	 * 透過 memberId 和 tagId 建立關聯
+	 * 
+	 * @param memberId 會員ID
+	 * @param tagId 標籤ID
+	 */
+	void addMemberTag(Long memberId, Long tagId);
+
+	/**
+	 * 為member建立多個tag關聯
+	 * 
+	 * @param memberId
+	 * @param tagIds
+	 */
+	void addTagsToMember(Long memberId,Collection<Long> tagsToAdd);
+
+	/**
+	 * 根據標籤 ID 增加多個會員 關聯
+	 * 
+	 * @param tagId
+	 * @param membersToAdd
+	 */
+	void addMembersToTag(Long tagId,Collection<Long> membersToAdd);
+	
+	/**
+	 * 根據會員 ID 刪除多個標籤關聯
+	 * 
+	 * @param memberId
+	 * @param tagsToRemove
+	 */
+	void removeTagsFromMember(Long memberId, Collection<Long> tagsToRemove);
+	
+	/**
+	 * 根據標籤 ID 刪除多個會員 關聯
+	 * 
+	 * @param tagId
+	 * @param membersToRemove
+	 */
+	void removeMembersFromTag(Long tagId, Collection<Long> membersToRemove);
+
+}

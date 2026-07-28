@@ -1,0 +1,263 @@
+package tw.org.tsess.service.impl;
+
+import java.time.LocalDate;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import lombok.RequiredArgsConstructor;
+import tw.org.tsess.convert.ArticleConvert;
+import tw.org.tsess.mapper.ArticleMapper;
+import tw.org.tsess.pojo.DTO.addEntityDTO.AddArticleDTO;
+import tw.org.tsess.pojo.DTO.putEntityDTO.PutArticleDTO;
+import tw.org.tsess.pojo.entity.Article;
+import tw.org.tsess.service.ArticleService;
+import tw.org.tsess.service.CmsService;
+import tw.org.tsess.utils.ArticleViewsCounterUtil;
+import tw.org.tsess.utils.S3Util;
+
+/**
+ * <p>
+ * 文章表 - 各個group的文章都儲存在這 服务实现类
+ * </p>
+ *
+ * @author Joey
+ * @since 2024-09-23
+ */
+@Service
+@RequiredArgsConstructor
+public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> implements ArticleService {
+
+	private final String PATH = "article-thumbnail";
+
+	@Value("${spring.cloud.aws.s3.bucketName}")
+	private String bucketName;
+
+	private final ArticleViewsCounterUtil articleViewsCounterUtil;
+	private final S3Util s3Util;
+	private final ArticleConvert articleConvert;
+	private final CmsService cmsService;
+
+	private String getDefaultImagePath() {
+		return "/" + bucketName + "/default-image/cta-img-1.jpg";
+	}
+
+	@Override
+	public List<Article> getArticleList() {
+		List<Article> articleList = baseMapper.selectList(null);
+		return articleList;
+	}
+
+	@Override
+	public IPage<Article> getArticlePage(Page<Article> page) {
+		Page<Article> articleList = baseMapper.selectPage(page, null);
+		return articleList;
+	}
+
+	@Override
+	public List<Article> getArticleListByGroup(String group) {
+		LambdaQueryWrapper<Article> articleQueryWrapper = new LambdaQueryWrapper<>();
+		articleQueryWrapper.eq(Article::getGroupType, group);
+
+		List<Article> articleList = baseMapper.selectList(articleQueryWrapper);
+		return articleList;
+	}
+
+	@Override
+	public IPage<Article> getArticlePageByGroup(String group, Page<Article> page) {
+		// 查詢群組、分頁，並倒序排列
+
+		// 查詢今天
+		LocalDate today = LocalDate.now();
+
+		// 查詢群組、分頁，發布日是今天以前的文章，並根據發布日期倒序排列
+		LambdaQueryWrapper<Article> articleQueryWrapper = new LambdaQueryWrapper<>();
+		articleQueryWrapper.eq(Article::getGroupType, group).orderByDesc(Article::getArticleId);
+		articleQueryWrapper.eq(Article::getGroupType, group)
+				.le(Article::getAnnouncementDate, today)
+				.orderByDesc(Article::getAnnouncementDate);
+		Page<Article> articleList = baseMapper.selectPage(page, articleQueryWrapper);
+
+		return articleList;
+	}
+
+	@Override
+	public IPage<Article> getArticlePageByGroupForAdmin(String group, Page<Article> page) {
+
+		// 查詢群組、分頁，並根據ID倒序排列
+		LambdaQueryWrapper<Article> articleQueryWrapper = new LambdaQueryWrapper<>();
+		articleQueryWrapper.eq(Article::getGroupType, group).orderByDesc(Article::getArticleId);
+		Page<Article> articleList = baseMapper.selectPage(page, articleQueryWrapper);
+
+		return articleList;
+	}
+
+	@Override
+	public List<Article> getArticleListByGroupAndCategory(String group, Long category) {
+		LambdaQueryWrapper<Article> articleQueryWrapper = new LambdaQueryWrapper<>();
+		articleQueryWrapper.eq(Article::getGroupType, group).eq(Article::getCategoryId, category);
+
+		List<Article> articleList = baseMapper.selectList(articleQueryWrapper);
+		return articleList;
+	}
+
+	@Override
+	public IPage<Article> getArticlePageByGroupAndCategory(String group, Long category, Page<Article> page) {
+		// 查詢群組、分頁，並倒序排列
+		LambdaQueryWrapper<Article> articleQueryWrapper = new LambdaQueryWrapper<>();
+		articleQueryWrapper.eq(Article::getGroupType, group)
+				.eq(Article::getCategoryId, category)
+				.orderByDesc(Article::getArticleId);
+		Page<Article> articleList = baseMapper.selectPage(page, articleQueryWrapper);
+
+		return articleList;
+	}
+
+	@Override
+	public Article getArticle(Long articleId) {
+		return baseMapper.selectById(articleId);
+	}
+
+	@Override
+	public Article getShowArticle(Long articleId) {
+		Article article = baseMapper.selectById(articleId);
+		articleViewsCounterUtil.incrementViewCount(article.getGroupType(), articleId);
+		return article;
+	}
+
+	@Override
+	public Long getArticleCount() {
+		return baseMapper.selectCount(null);
+	}
+
+	@Override
+	public Long getArticleCountByGroup(String group) {
+		LambdaQueryWrapper<Article> articleQueryWrapper = new LambdaQueryWrapper<>();
+		articleQueryWrapper.eq(Article::getGroupType, group);
+		return baseMapper.selectCount(articleQueryWrapper);
+
+	}
+
+	@Override
+	public Long getArticleViewsCountByGroup(String group) {
+		return articleViewsCounterUtil.getTotalViewCount(group);
+	}
+
+	@Override
+	public Long insertArticle(AddArticleDTO addArticleDTO, MultipartFile file) {
+		Article article = articleConvert.addDTOToEntity(addArticleDTO);
+
+		// 檔案存在，處理檔案
+		if (file != null) {
+
+			// 較驗過了，檔案必定存在，處理檔案
+			String dbUrl = s3Util.upload(PATH + article.getGroupType(), file.getOriginalFilename(), file);
+
+			article.setCoverThumbnailUrl(dbUrl);
+			// 放入資料庫
+			baseMapper.insert(article);
+
+		} else {
+			// 沒有檔案,直接處理數據
+			// 將類別名稱放入對象中
+			article.setCoverThumbnailUrl(this.getDefaultImagePath());
+			baseMapper.insert(article);
+		}
+
+		// 最後都返回自增ID
+		return article.getArticleId();
+
+	}
+
+	@Override
+	public void updateArticle(PutArticleDTO putArticleDTO, MultipartFile file) {
+
+		// 1.先拿到舊的資料
+		Article originalArticle = baseMapper.selectById(putArticleDTO.getArticleId());
+
+		// 2.拿到本次資料
+		Article article = articleConvert.putDTOToEntity(putArticleDTO);
+
+		// 3.獲取當前頁面有上傳過的圖片URL網址
+		List<String> tempUploadUrl = putArticleDTO.getTempUploadUrl();
+
+		// 4.獲取本次資料傳來的HTML字符串
+		String newContent = article.getContent();
+
+		// 5.獲得舊的資料的HTML字符串
+		String oldContent = originalArticle.getContent();
+
+		// 6.檔案存在，處理檔案
+		if (file != null) {
+
+			// 6-1.獲取之前的縮圖,並刪除之前的圖檔
+			String coverThumbnailUrl = originalArticle.getCoverThumbnailUrl();
+
+			// 6-2.取得S3 儲存地址
+			String oldS3Key = s3Util.extractS3PathInDbUrl(bucketName, coverThumbnailUrl);
+
+			// 6-3.如果原縮圖不為預設值,圖片進行刪除
+			if (!coverThumbnailUrl.equals(this.getDefaultImagePath())) {
+				s3Util.removeFile(bucketName, oldS3Key);
+			}
+
+			// 6-4.上傳檔案
+			String dbUrl = s3Util.upload(PATH + article.getGroupType(), file.getOriginalFilename(), file);
+
+			// 6-5.minio完整路徑放進對象中
+			article.setCoverThumbnailUrl(dbUrl);
+		}
+
+		// 7.最後移除舊的無使用的圖片以及臨時的圖片路徑
+		cmsService.cleanNotUsedImg(newContent, oldContent, tempUploadUrl, bucketName);
+
+		// 8.更新數據
+		baseMapper.updateById(article);
+
+	}
+
+	@Override
+	public void deleteArticle(Long articleId) {
+		Article article = baseMapper.selectById(articleId);
+
+		// 刪除自身資料
+		// 如果縮圖不為預設值,圖片才進行刪除
+		if (!article.getCoverThumbnailUrl().equals(this.getDefaultImagePath())) {
+			String s3Key = s3Util.extractS3PathInDbUrl(bucketName, article.getCoverThumbnailUrl());
+			s3Util.removeFile(bucketName, s3Key);
+		}
+
+		// 刪除資料前,刪除對應的內容圖片檔案
+		cmsService.cleanNotUsedImg(article.getContent(), bucketName);
+
+		// 刪除資料
+		baseMapper.deleteById(article.getArticleId());
+
+	}
+
+	@Override
+	public void deleteArticle(List<Long> articleIdList) {
+		// 遍歷循環刪除
+		for (Long articleId : articleIdList) {
+			// 去執行單個刪除
+			deleteArticle(articleId);
+		}
+
+	}
+
+	@Override
+	public Long getArticleViewsCount() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+
+
+}

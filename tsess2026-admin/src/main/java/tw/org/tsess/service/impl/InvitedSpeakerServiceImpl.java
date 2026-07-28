@@ -1,0 +1,204 @@
+package tw.org.tsess.service.impl;
+
+import java.util.List;
+
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import tw.org.tsess.convert.InvitedSpeakerConvert;
+import tw.org.tsess.enums.PublishStatusEnum;
+import tw.org.tsess.mapper.InvitedSpeakerMapper;
+import tw.org.tsess.pojo.DTO.EmailBodyContent;
+import tw.org.tsess.pojo.DTO.addEntityDTO.AddInvitedSpeakerDTO;
+import tw.org.tsess.pojo.DTO.putEntityDTO.PutInvitedSpeakerDTO;
+import tw.org.tsess.pojo.entity.InvitedSpeaker;
+import tw.org.tsess.pojo.entity.Member;
+import tw.org.tsess.service.AsyncService;
+import tw.org.tsess.service.InvitedSpeakerService;
+import tw.org.tsess.service.NotificationService;
+import tw.org.tsess.utils.S3Util;
+
+/**
+ * <p>
+ * 受邀請的講者，可能是講者，可能是座長 服务实现类
+ * </p>
+ *
+ * @author Joey
+ * @since 2025-04-23
+ */
+@Service
+@RequiredArgsConstructor
+public class InvitedSpeakerServiceImpl extends ServiceImpl<InvitedSpeakerMapper, InvitedSpeaker>
+		implements InvitedSpeakerService {
+
+	@Value("${project.domain}")
+	private String PROJECT_DOMAIN;
+
+	private static final String PATH = "invited-speaker/";
+
+	private final NotificationService notificationService;
+	private final AsyncService asyncService;
+	private final InvitedSpeakerConvert invitedSpeakerConvert;
+	private final S3Util s3Util;
+
+	@Value("${spring.cloud.aws.s3.bucketName}")
+	private String bucketName;
+
+	@Override
+	public InvitedSpeaker getInvitedSpeaker(Long id) {
+		InvitedSpeaker invitedSpeaker = baseMapper.selectById(id);
+		return invitedSpeaker;
+	}
+
+	@Override
+	public List<InvitedSpeaker> getAllInvitedSpeaker() {
+		List<InvitedSpeaker> invitedSpeakerList = baseMapper.selectList(null);
+		return invitedSpeakerList;
+	}
+
+	@Override
+	public IPage<InvitedSpeaker> getInvitedSpeakerPage(Page<InvitedSpeaker> page) {
+		Page<InvitedSpeaker> invitedSpeakerPage = baseMapper.selectPage(page, null);
+		return invitedSpeakerPage;
+	}
+
+	@Override
+	public IPage<InvitedSpeaker> getInvitedSpeakerPage(Page<InvitedSpeaker> page, String queryText) {
+
+		LambdaQueryWrapper<InvitedSpeaker> invitedSpeakerWrapper = new LambdaQueryWrapper<>();
+		invitedSpeakerWrapper.like(StringUtils.isNotBlank(queryText), InvitedSpeaker::getName, queryText);
+
+		Page<InvitedSpeaker> invitedSpeakerPage = baseMapper.selectPage(page, invitedSpeakerWrapper);
+		return invitedSpeakerPage;
+	}
+
+	@Override
+	public void addInviredSpeaker(Member member) {
+		InvitedSpeaker invitedSpeaker = new InvitedSpeaker();
+		invitedSpeaker.setCountry(member.getCountry());
+		invitedSpeaker.setMemberId(member.getMemberId());
+		invitedSpeaker.setName(StringUtils.joinWith(" ", StringUtils.trim(member.getFirstName()),
+				StringUtils.trim(member.getLastName())));
+	}
+
+	@Override
+	public void addInvitedSpeaker(MultipartFile file, AddInvitedSpeakerDTO addInvitedSpeakerDTO) {
+
+		//資料轉換成實體類
+		InvitedSpeaker invitedSpeaker = invitedSpeakerConvert.addDTOToEntity(addInvitedSpeakerDTO);
+
+		// 判斷如有檔案
+		if (file != null) {
+
+			// 處理檔名和擴展名
+			String originalFilename = file.getOriginalFilename();
+
+			// 上傳檔案至S3
+			String dbUrl = s3Util.upload(PATH, originalFilename, file);
+
+			// 設定檔案路徑
+			invitedSpeaker.setPhotoUrl(dbUrl);
+
+		}
+
+		// 最後都insert 進資料庫
+		baseMapper.insert(invitedSpeaker);
+
+	}
+
+	private void baseUpadteInvitedSpeaker(MultipartFile file, PutInvitedSpeakerDTO putInvitedSpeakerDTO) {
+		// 1.判斷是否符合Enum 規範, 但不取值
+		PublishStatusEnum.fromValue(putInvitedSpeakerDTO.getIsPublished());
+
+		// 2.轉換資料
+		InvitedSpeaker invitedSpeaker = invitedSpeakerConvert.putDTOToEntity(putInvitedSpeakerDTO);
+
+		// 3.判斷是否有檔案
+		if (file != null) {
+
+			//先找到之前的儲存的檔案路徑
+			InvitedSpeaker currentInvitedSpeaker = baseMapper.selectById(invitedSpeaker);
+			String photoUrl = currentInvitedSpeaker.getPhotoUrl();
+
+			// 如果確定之前有舊檔案路徑，且字串不為空
+			if (photoUrl != null && StringUtils.isNotEmpty(photoUrl)) {
+				//去掉 /bucketName/ 這個前墜，才是真正S3儲存的位置
+				String s3Key = s3Util.extractS3PathInDbUrl(bucketName, photoUrl);
+
+				//移除檔案
+				s3Util.removeFile(bucketName, s3Key);
+			}
+
+			//開始新增檔案， 處理檔名和擴展名
+			String originalFilename = file.getOriginalFilename();
+
+			// 上傳檔案至S3
+			String dbUrl = s3Util.upload(PATH, originalFilename, file);
+
+			// 設定檔案路徑
+			invitedSpeaker.setPhotoUrl(dbUrl);
+
+		}
+
+		// 4.更新受邀講者資料
+		baseMapper.updateById(invitedSpeaker);
+	}
+
+	@Override
+	public void updateInvitedSpeakerHimself(MultipartFile file, @Valid PutInvitedSpeakerDTO putInvitedSpeakerDTO) {
+		// 1.更新講者資料
+		this.baseUpadteInvitedSpeaker(file, putInvitedSpeakerDTO);
+
+		// 2.拿到信件內容,寄信通知管理者
+		EmailBodyContent emailContent = notificationService.generateSpeakerUpdateContent(putInvitedSpeakerDTO.getName(),
+				PROJECT_DOMAIN + "/background/speaker-list");
+		asyncService.sendCommonEmail("joey@zhongfu-pr.com.tw", "講者修改CV & 照片通知", emailContent.getHtmlContent(),
+				emailContent.getPlainTextContent());
+
+	}
+
+	@Override
+	public void updateInvitedSpeaker(MultipartFile file, @Valid PutInvitedSpeakerDTO putInvitedSpeakerDTO) {
+		// 更新講者資料
+		this.baseUpadteInvitedSpeaker(file, putInvitedSpeakerDTO);
+	}
+
+	@Override
+	public void deleteInvitedSpeaker(Long id) {
+
+		//先找到之前的儲存的檔案路徑
+		InvitedSpeaker currentInvitedSpeaker = baseMapper.selectById(id);
+
+		String photoUrl = currentInvitedSpeaker.getPhotoUrl();
+
+		// 如果確定之前有舊檔案路徑，且字串不為空
+		if (photoUrl != null && StringUtils.isNotEmpty(photoUrl)) {
+			//去掉/bucket/這個前墜，才是真正S3儲存的位置
+			String s3Key = s3Util.extractS3PathInDbUrl(bucketName, photoUrl);
+
+			//移除檔案
+			s3Util.removeFile(bucketName, s3Key);
+		}
+
+		// 移除資料庫資料
+		baseMapper.deleteById(id);
+	}
+
+	@Override
+	public void deleteInvitedSpeakerList(List<Long> ids) {
+		for (Long id : ids) {
+			this.deleteInvitedSpeaker(id);
+		}
+
+	}
+
+}
