@@ -18,14 +18,14 @@ debug：当此属性设置为true时，将打印出logback内部日志信息，�
     -->
 
     <!-- 定义日志文件名称 -->
-    <property name="APP_NAME" value="topbs2025" />
+    <property name="APP_NAME" value="tsess2026" />
     <!-- 定义日志文件的路径 
-        Windows會放在C:\Users\Joey\topbs2025\logs 
-        Linux應該會放在/home/使用者/topbs2025/logs 下 ; 使用者要看你把應用放在哪
+        Windows會放在C:\Users\Joey\tsess2026\logs 
+        Linux應該會放在/home/使用者/tsess2026/logs 下 ; 使用者要看你把應用放在哪
     -->
     <property name="LOG_PATH" value="${user.home}/${APP_NAME}/logs" />
     <!-- 定义日志的文件名 -->
-    <property name="LOG_FILE" value="${LOG_PATH}/topbs2025.log" />
+    <property name="LOG_FILE" value="${LOG_PATH}/tsess2026.log" />
 
     <!--
     appender的属性有name和class。name指定appender名称，后面使用该appender是也是通过名称来指定。
