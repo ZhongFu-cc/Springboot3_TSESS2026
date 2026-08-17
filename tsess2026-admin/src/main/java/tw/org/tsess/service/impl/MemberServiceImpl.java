@@ -44,11 +44,13 @@ import tw.org.tsess.pojo.DTO.putEntityDTO.PutMemberDTO;
 import tw.org.tsess.pojo.DTO.putEntityDTO.PutMemberForAdminDTO;
 import tw.org.tsess.pojo.VO.MemberOrderVO;
 import tw.org.tsess.pojo.VO.MemberTagVO;
+import tw.org.tsess.pojo.VO.OrdersVO;
 import tw.org.tsess.pojo.entity.Attendees;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
 import tw.org.tsess.saToken.StpKit;
 import tw.org.tsess.service.MemberService;
+import tw.org.tsess.service.OrdersService;
 import tw.org.tsess.utils.CountryUtil;
 
 @Service
@@ -58,6 +60,8 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, Member> impleme
 	private static final String MEMBER_CACHE_INFO_KEY = "memberInfo";
 	private final MessageHelper messageHelper;
 	private final MemberConvert memberConvert;
+	// 用於把訂單組裝成帶明細的VO , OrdersServiceImpl 不依賴 MemberService , 不會造成循環依賴
+	private final OrdersService ordersService;
 
 	@Override
 	public Member getMember(Long memberId) {
@@ -195,9 +199,15 @@ public class MemberServiceImpl extends ServiceImpl<MemberMapper, Member> impleme
 		 * 使用原因：每個會員可能有多個訂單，因此需要將多個訂單放在同一個 List 中，並且按 memberId 分組。這是使用 groupingBy
 		 * 的原因，它非常適合這種需求。
 		 */
-		Map<Long, List<Orders>> ordersMap = orderPage.getRecords()
+		// 訂單要帶明細回給前端, 這裡一次把整頁訂單轉成帶明細的VO, 再依 memberId 分組
+		// OrdersVO 本身不帶 memberId , 所以先留一份 ordersId -> memberId 的對照
+		Map<Long, Long> orderMemberIdMap = orderPage.getRecords()
 				.stream()
-				.collect(Collectors.groupingBy(Orders::getMemberId));
+				.collect(Collectors.toMap(Orders::getOrdersId, Orders::getMemberId));
+
+		Map<Long, List<OrdersVO>> ordersMap = ordersService.toOrdersVOList(orderPage.getRecords())
+				.stream()
+				.collect(Collectors.groupingBy(ordersVO -> orderMemberIdMap.get(ordersVO.getOrdersId())));
 
 		// memberMap：使用 .toMap() 以 memberId 為鍵，Member 物件本身為值，快速查找會員資料。
 		/**

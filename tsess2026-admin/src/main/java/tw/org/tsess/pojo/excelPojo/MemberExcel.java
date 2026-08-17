@@ -74,5 +74,11 @@ public class MemberExcel {
 
 	@ExcelProperty("註冊費金額")
 	private BigDecimal registrationFee;
-	
+
+	@ExcelProperty("補繳常年會費")
+	private BigDecimal membershipDue;
+
+	@ExcelProperty("訂單總金額")
+	private BigDecimal totalAmount;
+
 }
