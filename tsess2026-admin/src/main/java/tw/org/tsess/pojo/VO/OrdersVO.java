@@ -21,7 +21,7 @@ public class OrdersVO {
 	@Schema(description = "訂單總金額, 即各明細小計加總")
 	private BigDecimal totalAmount;
 
-	@Schema(description = "訂單狀態 0為未付款 1為已付款 2為付款失敗")
+	@Schema(description = "訂單狀態 0為未付款 ; 1為已付款-待審核 ; 2為付款成功 ; 3為付款失敗")
 	private Integer status;
 
 	@Schema(description = "訂單明細, 例如註冊費、補繳常年會費")

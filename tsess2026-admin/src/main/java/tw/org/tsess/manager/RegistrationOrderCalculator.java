@@ -41,22 +41,35 @@ public class RegistrationOrderCalculator {
 	 * @return
 	 */
 	public OrderDraftBO calculate(Member member) {
+		return calculate(member.getCountry(), member.getCategory(), member.getIdCard());
+	}
+
+	/**
+	 * 與 {@link #calculate(Member)} 完全相同的費用邏輯, 但只吃計費用得到的三個欄位<br>
+	 * 供註冊前試算使用, 此時會員尚未落庫, 拿不到 Member 實體
+	 *
+	 * @param country  國家, 內部只分國內國外
+	 * @param category 會員身分, 對應 MemberCategoryEnum 的 value
+	 * @param idCard   身分證字號 / 護照號碼, 用於比對常年會費欠繳名單
+	 * @return
+	 */
+	public OrderDraftBO calculate(String country, Integer category, String idCard) {
 
 		// 1.拿到配置設定,知道處於哪個註冊階段
 		RegistrationPhaseEnum registrationPhaseEnum = settingService.getRegistrationPhaseEnum();
 
 		// 2.透過Country 拿到國籍 , 只分國內國外
-		String country = CountryUtil.getTaiwanOrForeign(member.getCountry());
+		String taiwanOrForeign = CountryUtil.getTaiwanOrForeign(country);
 
 		// 3.拿到身分
-		MemberCategoryEnum memberCategoryEnum = MemberCategoryEnum.fromValue(member.getCategory());
+		MemberCategoryEnum memberCategoryEnum = MemberCategoryEnum.fromValue(category);
 
 		// 4.透過階段、國籍、身分，得到註冊費金額
-		BigDecimal registrationFee = registrationFeeConfig.getFee(registrationPhaseEnum.getValue(), country,
+		BigDecimal registrationFee = registrationFeeConfig.getFee(registrationPhaseEnum.getValue(), taiwanOrForeign,
 				memberCategoryEnum.getConfigKey());
 
 		// 5.以身分證字號比對常年會費欠繳名單, 名單中查無此人則為 0
-		BigDecimal membershipDue = membershipFeeDueService.getTotalDueByIdCard(member.getIdCard());
+		BigDecimal membershipDue = membershipFeeDueService.getTotalDueByIdCard(idCard);
 
 		// 6.組出訂單明細, 金額為 0 的項目不產生明細
 		List<OrderLineBO> lines = new ArrayList<>();
