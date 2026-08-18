@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -36,6 +37,7 @@ import tw.org.tsess.enums.OrderStatusEnum;
 import tw.org.tsess.enums.RegistrationPhaseEnum;
 import tw.org.tsess.exception.CheckinRecordException;
 import tw.org.tsess.exception.MemberException;
+import tw.org.tsess.pojo.BO.InvoiceLineBO;
 import tw.org.tsess.pojo.entity.Attendees;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
@@ -43,6 +45,7 @@ import tw.org.tsess.pojo.entity.Setting;
 import tw.org.tsess.service.AttendeesService;
 import tw.org.tsess.service.CheckinRecordService;
 import tw.org.tsess.service.MemberService;
+import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
 import tw.org.tsess.service.SettingService;
 
@@ -72,6 +75,7 @@ public class MemberManager {
 	private final RegistrationFeeConfig registrationFeeConfig;
 	private final MemberService memberService;
 	private final OrdersService ordersService;
+	private final OrdersItemService ordersItemService;
 	private final AttendeesService attendeesService;
 	private final CheckinRecordService checkinRecordService;
 	private final SettingService settingService;
@@ -169,8 +173,65 @@ public class MemberManager {
 	}
 
 	/**
+	 * 取得 Invoice(繳費證明) 的明細資料<br>
+	 * 一張註冊費訂單可能有多筆明細 (註冊費 + 補繳常年會費) , 金額逐筆由台幣換算成美金
+	 * <p>
+	 * 注意: 每筆小計各自四捨五入到分位會有進位誤差, 因此表頭的總金額請用
+	 * {@link #sumInvoiceLines(java.util.List)} 對這裡的結果加總, 不要拿訂單總額再除一次匯率,
+	 * 否則明細加總會與表頭對不起來
+	 *
+	 * @param ordersId
+	 * @return
+	 */
+	public List<InvoiceLineBO> getInvoiceLines(Long ordersId) {
+
+		BigDecimal rate = new BigDecimal(RATE);
+
+		return ordersItemService.getOrdersItemsByOrderId(ordersId).stream().map(ordersItem -> {
+
+			InvoiceLineBO invoiceLine = new InvoiceLineBO();
+			invoiceLine.setProductName(ordersItem.getProductName());
+			invoiceLine.setProductType(ordersItem.getProductType());
+			invoiceLine.setQuantity(ordersItem.getQuantity());
+			invoiceLine.setUnitPrice(this.toUsd(ordersItem.getUnitPrice(), rate));
+			invoiceLine.setSubtotal(this.toUsd(ordersItem.getSubtotal(), rate));
+
+			return invoiceLine;
+
+		}).toList();
+	}
+
+	/**
+	 * Invoice 明細的美金總額<br>
+	 * 必須是各明細小計的加總, 才能保證表頭與明細一致
+	 *
+	 * @param invoiceLines
+	 * @return
+	 */
+	public BigDecimal sumInvoiceLines(List<InvoiceLineBO> invoiceLines) {
+		return invoiceLines.stream()
+				.map(InvoiceLineBO::getSubtotal)
+				.reduce(BigDecimal.ZERO, BigDecimal::add)
+				.setScale(2, RoundingMode.HALF_UP);
+	}
+
+	/**
+	 * 台幣換算美金, 保留兩位小數, 四捨五入
+	 *
+	 * @param twdAmount
+	 * @param rate
+	 * @return
+	 */
+	private BigDecimal toUsd(BigDecimal twdAmount, BigDecimal rate) {
+		if (twdAmount == null) {
+			return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+		}
+		return twdAmount.divide(rate, 2, RoundingMode.HALF_UP);
+	}
+
+	/**
 	 * 產生繳費證明
-	 * 
+	 *
 	 * @param response
 	 * @param memberId
 	 * @throws IOException

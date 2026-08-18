@@ -1,9 +1,12 @@
 package tw.org.tsess.manager;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -14,6 +17,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import tw.org.tsess.constants.OrderConstants;
 import tw.org.tsess.convert.MemberConvert;
 import tw.org.tsess.enums.OrderStatusEnum;
 import tw.org.tsess.enums.TagTypeEnum;
@@ -26,11 +30,13 @@ import tw.org.tsess.pojo.VO.MemberVO;
 import tw.org.tsess.pojo.entity.Attendees;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
+import tw.org.tsess.pojo.entity.OrdersItem;
 import tw.org.tsess.pojo.excelPojo.MemberExcel;
 import tw.org.tsess.service.AttendeesService;
 import tw.org.tsess.service.AttendeesTagService;
 import tw.org.tsess.service.MemberService;
 import tw.org.tsess.service.MemberTagService;
+import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
 import tw.org.tsess.service.TagService;
 
@@ -47,6 +53,7 @@ public class MemberOrderManager {
 	private final MemberService memberService;
 	private final MemberTagService memberTagService;
 	private final OrdersService ordersService;
+	private final OrdersItemService ordersItemService;
 	private final AttendeesService attendeesService;
 	private final AttendeesTagService attendeesTagService;
 	private final TagService tagService;
@@ -192,24 +199,53 @@ public class MemberOrderManager {
 		// 3.高效率獲取所有會員資料
 		List<Member> memberList = memberService.getMembersEfficiently();
 
-		// 4.遍歷會員資料,組裝excelVO對象
+		// 4.訂單總額現在可能含補繳常年會費, 所以一次撈完明細, 用來拆出註冊費 / 常年會費兩欄
+		List<Long> ordersIds = ordersMap.values().stream().map(Orders::getOrdersId).toList();
+		Map<Long, List<OrdersItem>> ordersItemMap = ordersItemService.getOrdersItemsByOrderIds(ordersIds);
+
+		// 5.遍歷會員資料,組裝excelVO對象
 		List<MemberExcel> excelData = memberList.stream().map(member -> {
-			// 4-1 獲取該會員的訂單
+			// 5-1 獲取該會員的訂單
 			Orders orders = ordersMap.get(member.getMemberId());
 
-			// 4-2 轉換設置資料
+			// 5-2 依明細的產品類型, 分別加總註冊費 與 補繳常年會費
+			List<OrdersItem> ordersItemList = ordersItemMap.getOrDefault(orders.getOrdersId(), List.of());
+			BigDecimal registrationFee = this.sumByProductType(ordersItemList,
+					OrderConstants.ITEMS_SUMMARY_REGISTRATION, OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
+			BigDecimal membershipDue = this.sumByProductType(ordersItemList,
+					OrderConstants.ITEMS_TYPE_MEMBERSHIP_DUE);
+
+			// 5-3 轉換設置資料
 			MemberExcelRaw memberExcelRaw = memberConvert.entityToExcelRaw(member);
 			memberExcelRaw.setStatus(orders.getStatus());
-			memberExcelRaw.setRegistrationFee(orders.getTotalAmount());
+			memberExcelRaw.setRegistrationFee(registrationFee);
+			memberExcelRaw.setMembershipDue(membershipDue);
+			memberExcelRaw.setTotalAmount(orders.getTotalAmount());
 			MemberExcel memberExcel = memberConvert.memberExcelRawToExcel(memberExcelRaw);
 
 			return memberExcel;
 
 		}).toList();
 
-		// 5.輸出成Excel
+		// 6.輸出成Excel
 		EasyExcel.write(response.getOutputStream(), MemberExcel.class).sheet("會員列表").doWrite(excelData);
 
+	}
+
+	/**
+	 * 加總訂單明細中, 產品類型符合的小計
+	 *
+	 * @param ordersItemList
+	 * @param productTypes
+	 * @return
+	 */
+	private BigDecimal sumByProductType(List<OrdersItem> ordersItemList, String... productTypes) {
+		Set<String> targetTypes = Set.of(productTypes);
+		return ordersItemList.stream()
+				.filter(ordersItem -> targetTypes.contains(ordersItem.getProductType()))
+				.map(OrdersItem::getSubtotal)
+				.filter(Objects::nonNull)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 
 }

@@ -73,7 +73,7 @@ public class MemberTagVO {
 	@Schema(description = "訂單狀態 0為未付款 ; 1為已付款-待審核 ; 2為付款成功 ; 3為付款失敗")
 	private Integer status;
 	
-	@Schema(description = "註冊費金額")
+	@Schema(description = "註冊費訂單的應繳總金額, 可能包含補繳的常年會費, 明細請查訂單API")
 	private BigDecimal amount;
 
 	@Schema(description = "持有的標籤")

@@ -259,18 +259,18 @@ project:
       # 第一階段早鳥，台灣人
       taiwan:
         # 要與 MemberCategoryEnum 的configKey對應，不能亂寫
-        member: 700
-        others: 600
-        non-member: 1000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 第一階段早鳥，外國人
       foreign:
-        member: 9600
-        others: 4800
-        non-member: 12800
+        member: 3200
+        others: 3200
+        non-member: 3200
         mvp: 0
         speaker: 0
         moderator: 0
@@ -279,18 +279,18 @@ project:
     early-bird-phase2:
       # 第二階段早鳥，台灣人
       taiwan:
-        member: 700
-        others: 600
-        non-member: 1000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 第二階段早鳥，外國人
       foreign:
-        member: 9600
-        others: 4800
-        non-member: 12800
+        member: 3200
+        others: 3200
+        non-member: 3200
         mvp: 0
         speaker: 0
         moderator: 0
@@ -299,18 +299,18 @@ project:
     early-bird-phase3:
       # 第三階段早鳥，台灣人
       taiwan:
-        member: 700
-        others: 600
-        non-member: 1000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 第三階段早鳥，外國人
       foreign:
-        member: 9600
-        others: 4800
-        non-member: 12800
+        member: 3200
+        others: 3200
+        non-member: 3200
         mvp: 0
         speaker: 0
         moderator: 0
@@ -320,17 +320,17 @@ project:
       # 一般階段，台灣人
       taiwan:
         member: 1000
-        others: 1200
-        non-member: 1500
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 一般階段，外國人
       foreign:
-        member: 12800
-        others: 6400
-        non-member: 16000
+        member: 4800
+        others: 4800
+        non-member: 4800
         mvp: 0
         speaker: 0
         moderator: 0
@@ -339,20 +339,19 @@ project:
     on-site:
       # 現場報名，台灣人
       taiwan:
-        member: 1500
-        others: 1800
-        non-member: 2000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 現場報名，外國人
       foreign:
-        member: 12800
-        others: 6400
-        non-member: 16000
+        member: 4800
+        others: 4800
+        non-member: 4800
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
-
