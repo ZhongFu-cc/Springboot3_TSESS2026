@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import tw.org.tsess.constants.OrderConstants;
 import tw.org.tsess.convert.MemberConvert;
+import tw.org.tsess.enums.MembershipDueYearEnum;
 import tw.org.tsess.enums.OrderStatusEnum;
 import tw.org.tsess.enums.TagTypeEnum;
 import tw.org.tsess.helper.TagAssignmentHelper;
@@ -208,18 +209,25 @@ public class MemberOrderManager {
 			// 5-1 獲取該會員的訂單
 			Orders orders = ordersMap.get(member.getMemberId());
 
-			// 5-2 依明細的產品類型, 分別加總註冊費 與 補繳常年會費
+			// 5-2 依明細的產品類型, 分別加總註冊費 與 各年度的補繳常年會費
 			List<OrdersItem> ordersItemList = ordersItemMap.getOrDefault(orders.getOrdersId(), List.of());
 			BigDecimal registrationFee = this.sumByProductType(ordersItemList,
 					OrderConstants.ITEMS_SUMMARY_REGISTRATION, OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
-			BigDecimal membershipDue = this.sumByProductType(ordersItemList,
-					OrderConstants.ITEMS_TYPE_MEMBERSHIP_DUE);
+			BigDecimal membershipDue113 = this.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_113.getAdYear()));
+			BigDecimal membershipDue114 = this.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_114.getAdYear()));
+			BigDecimal membershipDue115 = this.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_115.getAdYear()));
 
 			// 5-3 轉換設置資料
 			MemberExcelRaw memberExcelRaw = memberConvert.entityToExcelRaw(member);
 			memberExcelRaw.setStatus(orders.getStatus());
 			memberExcelRaw.setRegistrationFee(registrationFee);
-			memberExcelRaw.setMembershipDue(membershipDue);
+			memberExcelRaw.setMembershipDue113(membershipDue113);
+			memberExcelRaw.setMembershipDue114(membershipDue114);
+			memberExcelRaw.setMembershipDue115(membershipDue115);
+			memberExcelRaw.setMembershipDue(membershipDue113.add(membershipDue114).add(membershipDue115));
 			memberExcelRaw.setTotalAmount(orders.getTotalAmount());
 			MemberExcel memberExcel = memberConvert.memberExcelRawToExcel(memberExcelRaw);
 

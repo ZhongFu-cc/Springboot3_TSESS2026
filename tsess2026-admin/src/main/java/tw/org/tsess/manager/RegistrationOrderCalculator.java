@@ -12,6 +12,7 @@ import tw.org.tsess.config.RegistrationFeeConfig;
 import tw.org.tsess.constants.OrderConstants;
 import tw.org.tsess.enums.MemberCategoryEnum;
 import tw.org.tsess.enums.RegistrationPhaseEnum;
+import tw.org.tsess.pojo.BO.MembershipDueYearBO;
 import tw.org.tsess.pojo.BO.OrderDraftBO;
 import tw.org.tsess.pojo.BO.OrderLineBO;
 import tw.org.tsess.pojo.entity.Member;
@@ -68,8 +69,8 @@ public class RegistrationOrderCalculator {
 		BigDecimal registrationFee = registrationFeeConfig.getFee(registrationPhaseEnum.getValue(), taiwanOrForeign,
 				memberCategoryEnum.getConfigKey());
 
-		// 5.以身分證字號比對常年會費欠繳名單, 名單中查無此人則為 0
-		BigDecimal membershipDue = membershipFeeDueService.getTotalDueByIdCard(idCard);
+		// 5.以身分證字號比對常年會費欠繳名單, 取得各年度欠費, 名單中查無此人則為空 List
+		List<MembershipDueYearBO> membershipDueYears = membershipFeeDueService.getYearlyDueByIdCard(idCard);
 
 		// 6.組出訂單明細, 金額為 0 的項目不產生明細
 		List<OrderLineBO> lines = new ArrayList<>();
@@ -79,9 +80,14 @@ public class RegistrationOrderCalculator {
 					PROJECT_NAME + " " + OrderConstants.ITEMS_SUMMARY_REGISTRATION, registrationFee));
 		}
 
-		if (membershipDue.compareTo(BigDecimal.ZERO) > 0) {
-			lines.add(OrderLineBO.ofSingle(OrderConstants.ITEMS_TYPE_MEMBERSHIP_DUE,
-					OrderConstants.MEMBERSHIP_DUE_PRODUCT_NAME, membershipDue));
+		// 補繳常年會費逐年一筆明細, 讓訂單、繳費證明、匯出都能看到是哪幾個年度欠費
+		for (MembershipDueYearBO membershipDueYear : membershipDueYears) {
+			if (membershipDueYear.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+				lines.add(OrderLineBO.ofSingle(
+						OrderConstants.membershipDueProductType(membershipDueYear.getAdYear()),
+						OrderConstants.membershipDueProductName(membershipDueYear.getAdYear()),
+						membershipDueYear.getAmount()));
+			}
 		}
 
 		// 7.完全免費時仍要留一筆 0 元註冊費明細, 讓每張訂單都至少有一筆細項
@@ -95,11 +101,17 @@ public class RegistrationOrderCalculator {
 				.map(OrderLineBO::getSubtotal)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 
+		// 9.補繳常年會費總額為各年度加總, 與明細必然一致
+		BigDecimal membershipDue = membershipDueYears.stream()
+				.map(MembershipDueYearBO::getAmount)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+
 		OrderDraftBO draft = new OrderDraftBO();
 		draft.setLines(lines);
 		draft.setTotalAmount(totalAmount);
 		draft.setRegistrationFee(registrationFee);
 		draft.setMembershipDue(membershipDue);
+		draft.setMembershipDueYears(membershipDueYears);
 
 		return draft;
 	}
@@ -121,6 +133,7 @@ public class RegistrationOrderCalculator {
 		draft.setTotalAmount(BigDecimal.ZERO);
 		draft.setRegistrationFee(BigDecimal.ZERO);
 		draft.setMembershipDue(BigDecimal.ZERO);
+		draft.setMembershipDueYears(List.of());
 
 		return draft;
 	}

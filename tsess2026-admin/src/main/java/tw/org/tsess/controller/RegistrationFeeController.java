@@ -40,6 +40,7 @@ public class RegistrationFeeController {
 		RegistrationFeePreviewVO registrationFeePreviewVO = new RegistrationFeePreviewVO();
 		registrationFeePreviewVO.setRegistrationFee(draft.getRegistrationFee());
 		registrationFeePreviewVO.setMembershipDue(draft.getMembershipDue());
+		registrationFeePreviewVO.setMembershipDueDetails(draft.getMembershipDueYears());
 		registrationFeePreviewVO.setTotalAmount(draft.getTotalAmount());
 		registrationFeePreviewVO.setFree(draft.isFree());
 

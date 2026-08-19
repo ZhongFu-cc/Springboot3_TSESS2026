@@ -54,6 +54,9 @@ import tw.org.tsess.service.SettingService;
 @Slf4j
 public class MemberManager {
 
+	@Value("${project.name}")
+	private String PROJECT_NAME;
+
 	@Value("${project.email.reply-to}")
 	private String EMAIL_REPLY_TO;
 
@@ -202,6 +205,26 @@ public class MemberManager {
 	}
 
 	/**
+	 * 團體報名專用的 Invoice 明細<br>
+	 * 團體報名的 orders_item 記的是「整團」的金額, 不是這位會員個人的份額,
+	 * 因此不能直接拿 {@link #getInvoiceLines(Long)} 的結果, 要用個人折扣後的金額另外組一筆
+	 *
+	 * @param usdAmount 個人折扣後的美金金額
+	 * @return
+	 */
+	private InvoiceLineBO toGroupInvoiceLine(BigDecimal usdAmount) {
+
+		InvoiceLineBO invoiceLine = new InvoiceLineBO();
+		invoiceLine.setProductType(OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
+		invoiceLine.setProductName(PROJECT_NAME + " " + OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
+		invoiceLine.setQuantity(1);
+		invoiceLine.setUnitPrice(usdAmount);
+		invoiceLine.setSubtotal(usdAmount);
+
+		return invoiceLine;
+	}
+
+	/**
 	 * Invoice 明細的美金總額<br>
 	 * 必須是各明細小計的加總, 才能保證表頭與明細一致
 	 *
@@ -284,7 +307,9 @@ public class MemberManager {
 			BigDecimal twdAmount = order.getTotalAmount();
 
 			// 5-6 如果itemsSummary為Group Registration Fee , 代表是團體報名 , 那台幣金額要重算
-			if (order.getItemsSummary().equals(OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION)) {
+			boolean isGroupRegistration = order.getItemsSummary()
+					.equals(OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
+			if (isGroupRegistration) {
 
 				// 1.拿到配置設定,知道處於哪個註冊階段
 				RegistrationPhaseEnum registrationPhaseEnum = settingService
@@ -317,6 +342,22 @@ public class MemberManager {
 			parameters.put("subReport", subReportInputStream);
 
 			parameters.put("orderItems", Arrays.asList(order));
+
+			/**
+			 * 5-8 Invoice 的逐筆明細<br>
+			 * 一張註冊費訂單可能有 註冊費 + 113/114/115 各年度的補繳常年會費, 最多 4 筆<br>
+			 * 子報表把資料源換成 $P{invoiceLines} 就會逐筆列出, 可用的欄位見 InvoiceLineBO:<br>
+			 * productName / productType / quantity / unitPrice / subtotal (金額皆為美金)<br>
+			 * <p>
+			 * 表頭總額請改用 $P{invoiceLinesTotal} , 它是各明細小計的加總;<br>
+			 * 沿用舊的 $P{totalAmount} 會因為每筆各自四捨五入而與明細加總差幾分錢
+			 */
+			List<InvoiceLineBO> invoiceLines = isGroupRegistration
+					? List.of(this.toGroupInvoiceLine(usdAmount))
+					: this.getInvoiceLines(order.getOrdersId());
+
+			parameters.put("invoiceLines", invoiceLines);
+			parameters.put("invoiceLinesTotal", this.sumInvoiceLines(invoiceLines));
 
 			/**
 			 * 填充報表

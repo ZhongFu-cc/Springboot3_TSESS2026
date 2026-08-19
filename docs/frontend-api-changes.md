@@ -8,11 +8,13 @@
 
 學會有一份「常年會費欠繳名單」，以身分證字號 / 護照號碼比對。使用者註冊時，系統除了依照 **註冊階段 × 國籍 × 會員身分** 算出報名費，還會查這份名單，若有欠費就**併入同一張訂單**一起收。
 
-所以：
+補繳的會費是**分年記錄**的：113、114、115 三個年度各自獨立，各年度金額才是真實來源，補繳總額一律由三年相加得出。所以：
 
 ```
-訂單總金額 = 報名費 + 補繳常年會費
+訂單總金額 = 報名費 + (113年會費 + 114年會費 + 115年會費)
 ```
+
+年度對照：民國 113 = 西元 2024、114 = 2025、115 = 2026。API 回傳同時提供兩種年份，中文版面用 `rocYear`，英文版面用 `adYear`。
 
 過去前端把訂單的 `totalAmount` 直接當作「報名費」顯示，現在會顯示錯誤金額，**必須改成讀明細**。
 
@@ -44,8 +46,13 @@ POST /registration-fee/preview
   "msg": "操作成功",
   "data": {
     "registrationFee": 3000,
-    "membershipDue": 1500,
-    "totalAmount": 4500,
+    "membershipDue": 7000,
+    "membershipDueDetails": [
+      { "rocYear": 113, "adYear": 2024, "amount": 2000 },
+      { "rocYear": 114, "adYear": 2025, "amount": 2000 },
+      { "rocYear": 115, "adYear": 2026, "amount": 3000 }
+    ],
+    "totalAmount": 10000,
     "free": false
   }
 }
@@ -54,9 +61,12 @@ POST /registration-fee/preview
 | 欄位 | 說明 |
 |---|---|
 | `registrationFee` | 報名費 |
-| `membershipDue` | 應補繳的常年會費，不在欠繳名單中則為 `0` |
-| `totalAmount` | 本次應付總金額，等於上面兩者相加 |
+| `membershipDue` | 應補繳的常年會費**合計**，等於 `membershipDueDetails` 各年度相加 |
+| `membershipDueDetails` | 分年明細。**含金額為 0 的年度**；不在欠繳名單中則為空陣列 `[]` |
+| `totalAmount` | 本次應付總金額，等於 `registrationFee + membershipDue` |
 | `free` | 是否完全免費。`true` 時註冊後不會產生付款流程 |
+
+`membershipDueDetails` 固定回三個年度（除非完全不在名單中），**金額為 0 的年度也會出現**。如果只想顯示有欠費的年度，前端自行 `filter(d => d.amount > 0)`。這樣設計是為了讓需要顯示完整三年狀態的畫面不必自己補零。
 
 ### 呼叫範例
 
@@ -97,9 +107,8 @@ async function previewFee(form) {
 ```json
 {
   "ordersId": "1234567890",
-  "natureId": "...",
   "itemsSummary": "Registration Fee",
-  "totalAmount": 4500,
+  "totalAmount": 10000,
   "status": 0,
   "ordersItemList": [
     {
@@ -112,24 +121,47 @@ async function previewFee(form) {
     },
     {
       "ordersItemId": "...",
-      "productType": "Annual Membership Dues",
-      "productName": "Annual Membership Dues (2024-2026)",
+      "productType": "Annual Membership Dues 2024",
+      "productName": "Annual Membership Dues (2024)",
       "quantity": 1,
-      "unitPrice": 1500,
-      "subtotal": 1500
+      "unitPrice": 2000,
+      "subtotal": 2000
+    },
+    {
+      "ordersItemId": "...",
+      "productType": "Annual Membership Dues 2025",
+      "productName": "Annual Membership Dues (2025)",
+      "quantity": 1,
+      "unitPrice": 2000,
+      "subtotal": 2000
+    },
+    {
+      "ordersItemId": "...",
+      "productType": "Annual Membership Dues 2026",
+      "productName": "Annual Membership Dues (2026)",
+      "quantity": 1,
+      "unitPrice": 3000,
+      "subtotal": 3000
     }
   ]
 }
 ```
 
-**要拆開顯示報名費與補繳會費，就靠 `ordersItemList[].productType` 判斷：**
+**要分類顯示，靠 `ordersItemList[].productType` 判斷：**
 
 | `productType` | 意義 |
 |---|---|
-| `Registration Fee` | 報名費 |
-| `Annual Membership Dues` | 補繳常年會費 |
+| `Registration Fee` | 報名費（個人報名） |
+| `Group Registration Fee` | 報名費（團體報名） |
+| `Annual Membership Dues 2024` | 補繳常年會費 — 113年 |
+| `Annual Membership Dues 2025` | 補繳常年會費 — 114年 |
+| `Annual Membership Dues 2026` | 補繳常年會費 — 115年 |
 
-金額為 0 的項目不會產生明細。唯一例外是完全免費的訂單，會保留一筆 0 元報名費明細，確保每張訂單至少有一筆細項。
+注意 `productType` 用的是**西元年**。要顯示民國年就 `-1911`，或直接用 `productName` 以外的欄位自行對照。
+
+**金額為 0 的項目不會產生明細**，所以只欠 115 年的人，`ordersItemList` 只會有報名費 + 一筆 2026 年度，共兩筆。訂單明細的筆數是浮動的（1~4 筆），**務必用迴圈渲染，不要寫死索引**。
+
+唯一例外是完全免費的訂單，會保留一筆 0 元報名費明細，確保每張訂單至少有一筆細項。
 
 ### `status` 對照
 
@@ -149,6 +181,10 @@ async function previewFee(form) {
 | `GET /member/owner`、`GET /member/member-and-order` | `MemberOrderVO.ordersList` 的元素型別由 `Orders` 改為 `OrdersVO`，每張訂單開始帶 `ordersItemList` |
 | `GET /member/unpaid-member`、`GET /member/tag/pagination` | `MemberTagVO.amount` **語意變更**：不再是「註冊費金額」，而是訂單應繳總額，可能含補繳的常年會費。需要拆解請另外查訂單 API |
 
+### 已知的無用欄位
+
+`OrdersVO`、`OrdersItemVO`、`PaymentVO` 上都有一個 `natureId`（自然鍵）欄位，Swagger 會把它畫成 base64 字串。**這三個欄位在對應的 entity 中並不存在，回傳值恆為 `null`**，是早期規劃後未實作的殘留。請勿使用，也不要依賴它做識別 —— 要識別訂單請用 `ordersId`。
+
 ---
 
 ## 四、註冊流程（重要）
@@ -167,7 +203,12 @@ async function previewFee(form) {
         │
         ▼
    顯示費用確認畫面
-   「報名費 NT$3,000 + 補繳常年會費 NT$1,500 = 應付 NT$4,500」
+   「報名費              NT$3,000
+     補繳常年會費-113年  NT$2,000
+     補繳常年會費-114年  NT$2,000
+     補繳常年會費-115年  NT$3,000
+     ─────────────────────────
+     應付合計            NT$10,000」
         │
         ├── 使用者「返回修改」 ──→ 回到表單（此時系統無任何殘留資料）
         │
@@ -190,6 +231,17 @@ async function previewFee(form) {
 
 **① 試算**
 建議在 `country`、`category`、`idCard` 任一欄位變動後觸發，但 `idCard` 請等 blur 再打，否則打字過程會一直查欠費名單。
+
+分年明細直接用 `membershipDueDetails` 迴圈渲染即可，不需要自己拆解金額：
+
+```js
+const rows = [
+  { label: '報名費', amount: fee.registrationFee },
+  ...fee.membershipDueDetails
+    .filter(d => d.amount > 0)
+    .map(d => ({ label: `補繳常年會費-${d.rocYear}年`, amount: d.amount }))
+]
+```
 
 **② 送出註冊**
 `POST /member`，body 為完整的 `AddMemberDTO`（含 `verificationKey` / `verificationCode`）。多傳的欄位後端會忽略，不會報錯，所以①和②可以共用同一個表單物件。

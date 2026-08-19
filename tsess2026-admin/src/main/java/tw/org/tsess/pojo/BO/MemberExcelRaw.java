@@ -74,7 +74,16 @@ public class MemberExcelRaw {
 	@Schema(description = "註冊費金額")
 	private BigDecimal registrationFee;
 
-	@Schema(description = "補繳常年會費金額")
+	@Schema(description = "補繳常年會費金額-113年度")
+	private BigDecimal membershipDue113;
+
+	@Schema(description = "補繳常年會費金額-114年度")
+	private BigDecimal membershipDue114;
+
+	@Schema(description = "補繳常年會費金額-115年度")
+	private BigDecimal membershipDue115;
+
+	@Schema(description = "補繳常年會費金額-三年度合計")
 	private BigDecimal membershipDue;
 
 	@Schema(description = "訂單總金額 = 註冊費 + 補繳常年會費")
