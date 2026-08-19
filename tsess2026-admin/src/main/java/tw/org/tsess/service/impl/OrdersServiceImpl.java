@@ -1,6 +1,7 @@
 package tw.org.tsess.service.impl;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -22,8 +23,10 @@ import lombok.RequiredArgsConstructor;
 import tw.org.tsess.constants.OrderConstants;
 import tw.org.tsess.convert.OrdersConvert;
 import tw.org.tsess.convert.OrdersItemConvert;
+import tw.org.tsess.enums.MembershipDueYearEnum;
 import tw.org.tsess.enums.OrderStatusEnum;
 import tw.org.tsess.mapper.OrdersMapper;
+import tw.org.tsess.pojo.BO.MembershipDueYearBO;
 import tw.org.tsess.pojo.BO.OrderDraftBO;
 import tw.org.tsess.pojo.BO.OrderLineBO;
 import tw.org.tsess.pojo.DTO.addEntityDTO.AddOrdersDTO;
@@ -34,6 +37,7 @@ import tw.org.tsess.pojo.entity.Orders;
 import tw.org.tsess.pojo.entity.OrdersItem;
 import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
+import tw.org.tsess.utils.OrdersItemUtil;
 
 @Service
 @RequiredArgsConstructor
@@ -334,10 +338,45 @@ public class OrdersServiceImpl extends ServiceImpl<OrdersMapper, Orders> impleme
 		for (OrdersVO ordersVO : ordersVOList) {
 			List<OrdersItem> ordersItemList = ordersItemMap.getOrDefault(ordersVO.getOrdersId(), Collections.emptyList());
 			ordersVO.setOrdersItemList(ordersItemConvert.entityListToVOList(ordersItemList));
+
+			// 5.由明細拆出報名費 與 分年的補繳常年會費, 讓前端不必自己解析 productType
+			this.fillFeeBreakdown(ordersVO, ordersItemList);
 		}
 
 		return ordersVOList;
 	}
+
+	/**
+	 * 依明細的產品類型, 拆出報名費與各年度的補繳常年會費<br>
+	 * 欄位結構刻意與註冊前的費用試算 API 一致, 前端可以共用同一套顯示元件
+	 *
+	 * @param ordersVO
+	 * @param ordersItemList
+	 */
+	private void fillFeeBreakdown(OrdersVO ordersVO, List<OrdersItem> ordersItemList) {
+
+		// 1.報名費, 個人與團體報名的產品類型不同, 兩者都算進來
+		ordersVO.setRegistrationFee(OrdersItemUtil.sumByProductType(ordersItemList,
+				OrderConstants.ITEMS_SUMMARY_REGISTRATION, OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION));
+
+		// 2.逐年加總補繳的常年會費
+		List<MembershipDueYearBO> membershipDueDetails = new ArrayList<>();
+		BigDecimal membershipDue = BigDecimal.ZERO;
+
+		for (MembershipDueYearEnum membershipDueYearEnum : MembershipDueYearEnum.values()) {
+			BigDecimal amount = OrdersItemUtil.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(membershipDueYearEnum.getAdYear()));
+			membershipDueDetails.add(MembershipDueYearBO.of(membershipDueYearEnum, amount));
+			membershipDue = membershipDue.add(amount);
+		}
+
+		ordersVO.setMembershipDue(membershipDue);
+
+		// 3.完全沒有會費項目時回空陣列, 不要給三筆 0 元讓前端誤以為有欠費紀錄
+		ordersVO.setMembershipDueDetails(
+				membershipDue.compareTo(BigDecimal.ZERO) > 0 ? membershipDueDetails : List.of());
+	}
+
 
 	@Override
 	public OrdersVO getOrdersVO(Long ordersId) {

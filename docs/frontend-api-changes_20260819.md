@@ -110,6 +110,13 @@ async function previewFee(form) {
   "itemsSummary": "Registration Fee",
   "totalAmount": 10000,
   "status": 0,
+  "registrationFee": 3000,
+  "membershipDue": 7000,
+  "membershipDueDetails": [
+    { "rocYear": 113, "adYear": 2024, "amount": 2000 },
+    { "rocYear": 114, "adYear": 2025, "amount": 2000 },
+    { "rocYear": 115, "adYear": 2026, "amount": 3000 }
+  ],
   "ordersItemList": [
     {
       "ordersItemId": "...",
@@ -147,7 +154,21 @@ async function previewFee(form) {
 }
 ```
 
-**要分類顯示，靠 `ordersItemList[].productType` 判斷：**
+### 拆帳欄位（建議優先使用）
+
+`OrdersVO` 直接提供拆好的金額，**欄位結構與試算 API 完全一致**，前端可以共用同一套顯示元件：
+
+| 欄位 | 說明 |
+|---|---|
+| `registrationFee` | 報名費，個人與團體報名都算在這裡 |
+| `membershipDue` | 補繳常年會費合計 |
+| `membershipDueDetails` | 分年明細，格式同試算 API 的同名欄位；這張訂單沒有任何會費項目時為 `[]` |
+
+一般顯示用這三個欄位就夠了，不需要自己去解析 `ordersItemList`。
+
+### ordersItemList（原始明細）
+
+需要逐筆列出時才用它，內容與資料庫的 `orders_item` 一對一對應。**要分類顯示，靠 `productType` 判斷：**
 
 | `productType` | 意義 |
 |---|---|

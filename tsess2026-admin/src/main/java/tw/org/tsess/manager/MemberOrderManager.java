@@ -5,8 +5,6 @@ import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -40,6 +38,7 @@ import tw.org.tsess.service.MemberTagService;
 import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
 import tw.org.tsess.service.TagService;
+import tw.org.tsess.utils.OrdersItemUtil;
 
 /**
  * 管理會員 和 訂單的需求,<br>
@@ -211,13 +210,13 @@ public class MemberOrderManager {
 
 			// 5-2 依明細的產品類型, 分別加總註冊費 與 各年度的補繳常年會費
 			List<OrdersItem> ordersItemList = ordersItemMap.getOrDefault(orders.getOrdersId(), List.of());
-			BigDecimal registrationFee = this.sumByProductType(ordersItemList,
+			BigDecimal registrationFee = OrdersItemUtil.sumByProductType(ordersItemList,
 					OrderConstants.ITEMS_SUMMARY_REGISTRATION, OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
-			BigDecimal membershipDue113 = this.sumByProductType(ordersItemList,
+			BigDecimal membershipDue113 = OrdersItemUtil.sumByProductType(ordersItemList,
 					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_113.getAdYear()));
-			BigDecimal membershipDue114 = this.sumByProductType(ordersItemList,
+			BigDecimal membershipDue114 = OrdersItemUtil.sumByProductType(ordersItemList,
 					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_114.getAdYear()));
-			BigDecimal membershipDue115 = this.sumByProductType(ordersItemList,
+			BigDecimal membershipDue115 = OrdersItemUtil.sumByProductType(ordersItemList,
 					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_115.getAdYear()));
 
 			// 5-3 轉換設置資料
@@ -238,22 +237,6 @@ public class MemberOrderManager {
 		// 6.輸出成Excel
 		EasyExcel.write(response.getOutputStream(), MemberExcel.class).sheet("會員列表").doWrite(excelData);
 
-	}
-
-	/**
-	 * 加總訂單明細中, 產品類型符合的小計
-	 *
-	 * @param ordersItemList
-	 * @param productTypes
-	 * @return
-	 */
-	private BigDecimal sumByProductType(List<OrdersItem> ordersItemList, String... productTypes) {
-		Set<String> targetTypes = Set.of(productTypes);
-		return ordersItemList.stream()
-				.filter(ordersItem -> targetTypes.contains(ordersItem.getProductType()))
-				.map(OrdersItem::getSubtotal)
-				.filter(Objects::nonNull)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 
 }
