@@ -1,6 +1,7 @@
 package tw.org.tsess.service.impl;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -9,7 +10,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import lombok.RequiredArgsConstructor;
+import tw.org.tsess.enums.MembershipDueYearEnum;
 import tw.org.tsess.mapper.MembershipFeeDueMapper;
+import tw.org.tsess.pojo.BO.MembershipDueYearBO;
 import tw.org.tsess.pojo.entity.MembershipFeeDue;
 import tw.org.tsess.service.MembershipFeeDueService;
 
@@ -19,15 +22,29 @@ public class MembershipFeeDueServiceImpl extends ServiceImpl<MembershipFeeDueMap
 		implements MembershipFeeDueService {
 
 	@Override
-	public BigDecimal getTotalDueByIdCard(String idCard) {
+	public List<MembershipDueYearBO> getYearlyDueByIdCard(String idCard) {
 
-		// 1.查無此人 或 沒有登記金額 , 一律視為無欠費
+		// 1.查無此人一律視為無欠費 , 回傳空 List 讓呼叫端不會產生任何明細
 		MembershipFeeDue membershipFeeDue = this.getByIdCard(idCard);
-		if (membershipFeeDue == null || membershipFeeDue.getTotalDue() == null) {
-			return BigDecimal.ZERO;
+		if (membershipFeeDue == null) {
+			return List.of();
 		}
 
-		return membershipFeeDue.getTotalDue();
+		// 2.分年金額是唯一真實來源 , 依 enum 宣告的順序 (113 -> 115) 組出結果
+		return List.of(
+				MembershipDueYearBO.of(MembershipDueYearEnum.ROC_113, membershipFeeDue.getDue113()),
+				MembershipDueYearBO.of(MembershipDueYearEnum.ROC_114, membershipFeeDue.getDue114()),
+				MembershipDueYearBO.of(MembershipDueYearEnum.ROC_115, membershipFeeDue.getDue115()));
+	}
+
+	@Override
+	public BigDecimal getTotalDueByIdCard(String idCard) {
+
+		// 總額一律由各年度加總得出 , 不讀 total_due 欄位 , 避免兩份數字對不起來
+		return this.getYearlyDueByIdCard(idCard)
+				.stream()
+				.map(MembershipDueYearBO::getAmount)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 
 	@Override

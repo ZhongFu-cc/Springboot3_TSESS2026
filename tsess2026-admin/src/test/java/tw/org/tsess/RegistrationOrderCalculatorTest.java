@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,8 +21,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import tw.org.tsess.config.RegistrationFeeConfig;
 import tw.org.tsess.constants.OrderConstants;
 import tw.org.tsess.enums.MemberCategoryEnum;
+import tw.org.tsess.enums.MembershipDueYearEnum;
 import tw.org.tsess.enums.RegistrationPhaseEnum;
 import tw.org.tsess.manager.RegistrationOrderCalculator;
+import tw.org.tsess.pojo.BO.MembershipDueYearBO;
 import tw.org.tsess.pojo.BO.OrderDraftBO;
 import tw.org.tsess.pojo.BO.OrderLineBO;
 import tw.org.tsess.pojo.entity.Member;
@@ -66,10 +69,13 @@ public class RegistrationOrderCalculatorTest {
 		when(settingService.getRegistrationPhaseEnum()).thenReturn(RegistrationPhaseEnum.REGULAR);
 	}
 
-	/** 設定這次報名算出來的註冊費 與 名單上的欠費 */
-	private void given(BigDecimal registrationFee, BigDecimal membershipDue) {
+	/** 設定這次報名算出來的註冊費 與 名單上各年度的欠費 */
+	private void given(BigDecimal registrationFee, long due113, long due114, long due115) {
 		when(registrationFeeConfig.getFee(anyString(), anyString(), anyString())).thenReturn(registrationFee);
-		when(membershipFeeDueService.getTotalDueByIdCard(ID_CARD)).thenReturn(membershipDue);
+		when(membershipFeeDueService.getYearlyDueByIdCard(ID_CARD)).thenReturn(List.of(
+				MembershipDueYearBO.of(MembershipDueYearEnum.ROC_113, BigDecimal.valueOf(due113)),
+				MembershipDueYearBO.of(MembershipDueYearEnum.ROC_114, BigDecimal.valueOf(due114)),
+				MembershipDueYearBO.of(MembershipDueYearEnum.ROC_115, BigDecimal.valueOf(due115))));
 	}
 
 	/** 從明細中找出指定產品類型的那一筆 */
@@ -81,15 +87,21 @@ public class RegistrationOrderCalculatorTest {
 				.orElseThrow(() -> new AssertionError("找不到產品類型為 " + productType + " 的明細"));
 	}
 
+	/** 指定年度的會費明細 */
+	private OrderLineBO dueLineOf(OrderDraftBO draft, MembershipDueYearEnum year) {
+		return lineOf(draft, OrderConstants.membershipDueProductType(year.getAdYear()));
+	}
+
 	@Test
-	@DisplayName("註冊費>0 且有欠費 → 兩筆明細, 總額為兩者相加")
+	@DisplayName("註冊費>0 且三個年度都有欠費 → 四筆明細, 總額為全部相加")
 	void feeAndDue() {
 
-		given(BigDecimal.valueOf(1000), BigDecimal.valueOf(7000));
+		// 正式會員的實際費率: 113年 2000 / 114年 2000 / 115年 3000
+		given(BigDecimal.valueOf(1000), 2000, 2000, 3000);
 
 		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
 
-		assertEquals(2, draft.getLines().size());
+		assertEquals(4, draft.getLines().size());
 		assertEquals(0, BigDecimal.valueOf(8000).compareTo(draft.getTotalAmount()));
 		assertEquals(0, BigDecimal.valueOf(1000).compareTo(draft.getRegistrationFee()));
 		assertEquals(0, BigDecimal.valueOf(7000).compareTo(draft.getMembershipDue()));
@@ -100,16 +112,39 @@ public class RegistrationOrderCalculatorTest {
 		assertEquals(1, registrationLine.getQuantity());
 		assertEquals(0, BigDecimal.valueOf(1000).compareTo(registrationLine.getSubtotal()));
 
-		OrderLineBO dueLine = lineOf(draft, OrderConstants.ITEMS_TYPE_MEMBERSHIP_DUE);
-		assertEquals(OrderConstants.MEMBERSHIP_DUE_PRODUCT_NAME, dueLine.getProductName());
-		assertEquals(0, BigDecimal.valueOf(7000).compareTo(dueLine.getSubtotal()));
+		// 每個年度各自一筆, 品名帶西元年
+		assertEquals(0, BigDecimal.valueOf(2000).compareTo(dueLineOf(draft, MembershipDueYearEnum.ROC_113).getSubtotal()));
+		assertEquals(0, BigDecimal.valueOf(2000).compareTo(dueLineOf(draft, MembershipDueYearEnum.ROC_114).getSubtotal()));
+		assertEquals(0, BigDecimal.valueOf(3000).compareTo(dueLineOf(draft, MembershipDueYearEnum.ROC_115).getSubtotal()));
+		assertEquals("Annual Membership Dues (2024)",
+				dueLineOf(draft, MembershipDueYearEnum.ROC_113).getProductName());
+		assertEquals("Annual Membership Dues (2026)",
+				dueLineOf(draft, MembershipDueYearEnum.ROC_115).getProductName());
+	}
+
+	@Test
+	@DisplayName("只欠其中一個年度 → 只產生該年度一筆會費明細")
+	void singleYearDue() {
+
+		// 準會員只欠 115 年度 500 元
+		given(BigDecimal.valueOf(1000), 0, 0, 500);
+
+		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
+
+		assertEquals(2, draft.getLines().size());
+		assertEquals(0, BigDecimal.valueOf(1500).compareTo(draft.getTotalAmount()));
+		assertEquals(0, BigDecimal.valueOf(500).compareTo(draft.getMembershipDue()));
+
+		OrderLineBO dueLine = dueLineOf(draft, MembershipDueYearEnum.ROC_115);
+		assertEquals("Annual Membership Dues (2026)", dueLine.getProductName());
+		assertEquals(0, BigDecimal.valueOf(500).compareTo(dueLine.getSubtotal()));
 	}
 
 	@Test
 	@DisplayName("註冊費>0 但無欠費 → 只有一筆註冊費明細")
 	void feeOnly() {
 
-		given(BigDecimal.valueOf(4000), BigDecimal.ZERO);
+		given(BigDecimal.valueOf(4000), 0, 0, 0);
 
 		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
 
@@ -120,17 +155,18 @@ public class RegistrationOrderCalculatorTest {
 	}
 
 	@Test
-	@DisplayName("註冊費=0 但有欠費 → 只有一筆會費明細, 且訂單不是免費的")
+	@DisplayName("註冊費=0 但有欠費 → 只有會費明細, 且訂單不是免費的")
 	void dueOnly() {
 
 		// speaker / staff 這類身分註冊費為 0 , 但仍可能欠常年會費
 		member.setCategory(MemberCategoryEnum.SPEAKER.getValue());
-		given(BigDecimal.ZERO, BigDecimal.valueOf(3000));
+		given(BigDecimal.ZERO, 0, 0, 3000);
 
 		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
 
 		assertEquals(1, draft.getLines().size());
-		assertEquals(OrderConstants.ITEMS_TYPE_MEMBERSHIP_DUE, draft.getLines().get(0).getProductType());
+		assertEquals(OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_115.getAdYear()),
+				draft.getLines().get(0).getProductType());
 		assertEquals(0, BigDecimal.valueOf(3000).compareTo(draft.getTotalAmount()));
 
 		// 這是最關鍵的分支: 註冊費為0不代表免費, 訂單必須是要付款的
@@ -142,7 +178,7 @@ public class RegistrationOrderCalculatorTest {
 	void allFree() {
 
 		member.setCategory(MemberCategoryEnum.STAFF.getValue());
-		given(BigDecimal.ZERO, BigDecimal.ZERO);
+		given(BigDecimal.ZERO, 0, 0, 0);
 
 		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
 
@@ -158,20 +194,38 @@ public class RegistrationOrderCalculatorTest {
 
 		member.setIdCard("NOT_IN_LIST");
 		when(registrationFeeConfig.getFee(anyString(), anyString(), anyString())).thenReturn(BigDecimal.valueOf(1000));
-		when(membershipFeeDueService.getTotalDueByIdCard("NOT_IN_LIST")).thenReturn(BigDecimal.ZERO);
+		when(membershipFeeDueService.getYearlyDueByIdCard("NOT_IN_LIST")).thenReturn(List.of());
 
 		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
 
 		assertEquals(1, draft.getLines().size());
 		assertEquals(0, BigDecimal.valueOf(1000).compareTo(draft.getTotalAmount()));
 		assertEquals(0, BigDecimal.ZERO.compareTo(draft.getMembershipDue()));
+		assertTrue(draft.getMembershipDueYears().isEmpty());
+	}
+
+	@Test
+	@DisplayName("補繳總額必定等於各年度明細加總")
+	void membershipDueMatchesYears() {
+
+		given(BigDecimal.valueOf(1000), 2000, 500, 3000);
+
+		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
+
+		BigDecimal sumOfYears = draft.getMembershipDueYears()
+				.stream()
+				.map(MembershipDueYearBO::getAmount)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+
+		assertEquals(0, sumOfYears.compareTo(draft.getMembershipDue()));
+		assertEquals(0, BigDecimal.valueOf(5500).compareTo(draft.getMembershipDue()));
 	}
 
 	@Test
 	@DisplayName("訂單總額必定等於各明細小計加總")
 	void totalAlwaysMatchesLines() {
 
-		given(BigDecimal.valueOf(1000), BigDecimal.valueOf(5500));
+		given(BigDecimal.valueOf(1000), 2000, 500, 3000);
 
 		OrderDraftBO draft = registrationOrderCalculator.calculate(member);
 

@@ -50,7 +50,23 @@ public class MembershipFeeDue implements Serializable {
 	@TableField("member_category")
 	private String memberCategory;
 
-	@Schema(description = "應補繳常年會費總額(113-115)")
+	@Schema(description = "113年度應補繳常年會費")
+	@TableField("due_113")
+	private BigDecimal due113;
+
+	@Schema(description = "114年度應補繳常年會費")
+	@TableField("due_114")
+	private BigDecimal due114;
+
+	@Schema(description = "115年度應補繳常年會費")
+	@TableField("due_115")
+	private BigDecimal due115;
+
+	/**
+	 * 學會提供的加總值, 僅供人工對帳<br>
+	 * 程式一律以 due_113 + due_114 + due_115 為準, 不要讀這個欄位
+	 */
+	@Schema(description = "學會提供的加總值, 僅供對帳, 程式請改用三個年度欄位相加")
 	@TableField("total_due")
 	private BigDecimal totalDue;
 

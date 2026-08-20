@@ -22,8 +22,11 @@ public class OrderDraftBO {
 	@Schema(description = "其中的註冊費金額, 供 Excel 匯出拆欄使用")
 	private BigDecimal registrationFee;
 
-	@Schema(description = "其中的常年會費補繳金額, 供 Excel 匯出拆欄使用")
+	@Schema(description = "其中的常年會費補繳金額, 為各年度加總, 供 Excel 匯出拆欄使用")
 	private BigDecimal membershipDue;
+
+	@Schema(description = "常年會費補繳的分年明細, 名單中查無此人時為空 List")
+	private List<MembershipDueYearBO> membershipDueYears;
 
 	/**
 	 * 這次報名是否完全免費<br>

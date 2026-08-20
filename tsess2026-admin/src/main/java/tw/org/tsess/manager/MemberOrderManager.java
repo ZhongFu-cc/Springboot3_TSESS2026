@@ -5,8 +5,6 @@ import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
@@ -19,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import tw.org.tsess.constants.OrderConstants;
 import tw.org.tsess.convert.MemberConvert;
+import tw.org.tsess.enums.MembershipDueYearEnum;
 import tw.org.tsess.enums.OrderStatusEnum;
 import tw.org.tsess.enums.TagTypeEnum;
 import tw.org.tsess.helper.TagAssignmentHelper;
@@ -39,6 +38,7 @@ import tw.org.tsess.service.MemberTagService;
 import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
 import tw.org.tsess.service.TagService;
+import tw.org.tsess.utils.OrdersItemUtil;
 
 /**
  * 管理會員 和 訂單的需求,<br>
@@ -208,18 +208,25 @@ public class MemberOrderManager {
 			// 5-1 獲取該會員的訂單
 			Orders orders = ordersMap.get(member.getMemberId());
 
-			// 5-2 依明細的產品類型, 分別加總註冊費 與 補繳常年會費
+			// 5-2 依明細的產品類型, 分別加總註冊費 與 各年度的補繳常年會費
 			List<OrdersItem> ordersItemList = ordersItemMap.getOrDefault(orders.getOrdersId(), List.of());
-			BigDecimal registrationFee = this.sumByProductType(ordersItemList,
+			BigDecimal registrationFee = OrdersItemUtil.sumByProductType(ordersItemList,
 					OrderConstants.ITEMS_SUMMARY_REGISTRATION, OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
-			BigDecimal membershipDue = this.sumByProductType(ordersItemList,
-					OrderConstants.ITEMS_TYPE_MEMBERSHIP_DUE);
+			BigDecimal membershipDue113 = OrdersItemUtil.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_113.getAdYear()));
+			BigDecimal membershipDue114 = OrdersItemUtil.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_114.getAdYear()));
+			BigDecimal membershipDue115 = OrdersItemUtil.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_115.getAdYear()));
 
 			// 5-3 轉換設置資料
 			MemberExcelRaw memberExcelRaw = memberConvert.entityToExcelRaw(member);
 			memberExcelRaw.setStatus(orders.getStatus());
 			memberExcelRaw.setRegistrationFee(registrationFee);
-			memberExcelRaw.setMembershipDue(membershipDue);
+			memberExcelRaw.setMembershipDue113(membershipDue113);
+			memberExcelRaw.setMembershipDue114(membershipDue114);
+			memberExcelRaw.setMembershipDue115(membershipDue115);
+			memberExcelRaw.setMembershipDue(membershipDue113.add(membershipDue114).add(membershipDue115));
 			memberExcelRaw.setTotalAmount(orders.getTotalAmount());
 			MemberExcel memberExcel = memberConvert.memberExcelRawToExcel(memberExcelRaw);
 
@@ -230,22 +237,6 @@ public class MemberOrderManager {
 		// 6.輸出成Excel
 		EasyExcel.write(response.getOutputStream(), MemberExcel.class).sheet("會員列表").doWrite(excelData);
 
-	}
-
-	/**
-	 * 加總訂單明細中, 產品類型符合的小計
-	 *
-	 * @param ordersItemList
-	 * @param productTypes
-	 * @return
-	 */
-	private BigDecimal sumByProductType(List<OrdersItem> ordersItemList, String... productTypes) {
-		Set<String> targetTypes = Set.of(productTypes);
-		return ordersItemList.stream()
-				.filter(ordersItem -> targetTypes.contains(ordersItem.getProductType()))
-				.map(OrdersItem::getSubtotal)
-				.filter(Objects::nonNull)
-				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 
 }
