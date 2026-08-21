@@ -236,8 +236,8 @@ project:
     from: notify@tsess.org.tw
     # 寄件人顯示名稱
     from-name: TSESS 2026 Notification
-    # 回覆信箱
-    reply-to: tsess106@gmail.com
+    # 回覆信箱,寄信時這邊要與From相同,否則信譽分下降太多, 這邊是指信件中需要回覆的位置
+    reply-to: tsess201805@gmail.com
     # 付款相關
   payment:
     # 付款後客戶返回的頁面

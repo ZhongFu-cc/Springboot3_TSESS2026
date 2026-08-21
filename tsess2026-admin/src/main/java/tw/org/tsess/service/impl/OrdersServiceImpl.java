@@ -365,7 +365,7 @@ public class OrdersServiceImpl extends ServiceImpl<OrdersMapper, Orders> impleme
 
 		for (MembershipDueYearEnum membershipDueYearEnum : MembershipDueYearEnum.values()) {
 			BigDecimal amount = OrdersItemUtil.sumByProductType(ordersItemList,
-					OrderConstants.membershipDueProductType(membershipDueYearEnum.getAdYear()));
+					OrderConstants.membershipDueProductType(membershipDueYearEnum.getRocYear()));
 			membershipDueDetails.add(MembershipDueYearBO.of(membershipDueYearEnum, amount));
 			membershipDue = membershipDue.add(amount);
 		}
