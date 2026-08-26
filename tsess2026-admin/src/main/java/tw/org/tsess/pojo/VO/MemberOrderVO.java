@@ -4,7 +4,6 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
-import tw.org.tsess.pojo.entity.Orders;
 
 @Data
 public class MemberOrderVO {
@@ -39,6 +38,6 @@ public class MemberOrderVO {
 	@Schema(description = "匯款帳號-後五碼  台灣會員使用")
 	private String remitAccountLast5;
 	
-	@Schema(description = "會員持有的訂單列表")
-	private List<Orders> ordersList;
+	@Schema(description = "會員持有的訂單列表, 每張訂單帶有明細 ordersItemList")
+	private List<OrdersVO> ordersList;
 }

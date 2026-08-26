@@ -104,16 +104,16 @@ public class AsyncServiceImpl implements AsyncService {
 		try {
 			MimeMessage message = mailSender.createMimeMessage();
 			// 🔥 關鍵：設定信件為「高重要性」
-			message.addHeader("X-Priority", "1"); // 1 = High, 3 = Normal, 5 = Low
-			message.addHeader("Importance", "High"); // Outlook / Exchange 會識別
-			message.addHeader("Priority", "urgent"); // 部分郵件用戶端使用這個標頭
+//			message.addHeader("X-Priority", "1"); // 1 = High, 3 = Normal, 5 = Low
+//			message.addHeader("Importance", "High"); // Outlook / Exchange 會識別
+//			message.addHeader("Priority", "urgent"); // 部分郵件用戶端使用這個標頭
 
 			MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
 			// MimeMessageHelper 支援 String[]
 			helper.setTo(recipients);
 			helper.setFrom(EMAIL_FROM, EMAIL_FROM_NAME);
-			helper.setReplyTo(EMAIL_REPLY_TO);
+//			helper.setReplyTo(EMAIL_REPLY_TO);
 			helper.setSubject(subject);
 			helper.setText(plainTextContent, htmlContent);
 

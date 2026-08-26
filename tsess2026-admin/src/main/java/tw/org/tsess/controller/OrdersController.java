@@ -30,6 +30,7 @@ import tw.org.tsess.manager.OrderPaymentManager;
 import tw.org.tsess.pojo.DTO.OfflineTransferDTO;
 import tw.org.tsess.pojo.DTO.addEntityDTO.AddOrdersDTO;
 import tw.org.tsess.pojo.DTO.putEntityDTO.PutOrdersDTO;
+import tw.org.tsess.pojo.VO.OrdersVO;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
 import tw.org.tsess.saToken.StpKit;
@@ -54,10 +55,11 @@ public class OrdersController {
 	@Parameters({
 			@Parameter(name = "Authorization-member", description = "請求頭token,token-value開頭必須為Bearer ", required = true, in = ParameterIn.HEADER) })
 	@SaCheckLogin(type = StpKit.MEMBER_TYPE)
-	public R<Orders> getOrdersForOwner(@PathVariable("id") Long ordersId) {
+	public R<OrdersVO> getOrdersForOwner(@PathVariable("id") Long ordersId) {
 		Member memberCache = memberService.getMemberInfo();
 		Orders orders = ordersService.getOrders(memberCache.getMemberId(), ordersId);
-		return R.ok(orders);
+		List<OrdersVO> ordersVOList = ordersService.toOrdersVOList(orders == null ? List.of() : List.of(orders));
+		return R.ok(ordersVOList.isEmpty() ? null : ordersVOList.get(0));
 	}
 
 	@GetMapping("{id}")
@@ -65,9 +67,9 @@ public class OrdersController {
 	@Parameters({
 			@Parameter(name = "Authorization", description = "請求頭token,token-value開頭必須為Bearer ", required = true, in = ParameterIn.HEADER) })
 	@SaCheckRole("super-admin")
-	public R<Orders> getOrders(@PathVariable("id") Long ordersId) {
-		Orders orders = ordersService.getOrders(ordersId);
-		return R.ok(orders);
+	public R<OrdersVO> getOrders(@PathVariable("id") Long ordersId) {
+		OrdersVO ordersVO = ordersService.getOrdersVO(ordersId);
+		return R.ok(ordersVO);
 	}
 
 	@GetMapping("owner")
@@ -75,10 +77,10 @@ public class OrdersController {
 	@Parameters({
 			@Parameter(name = "Authorization-member", description = "請求頭token,token-value開頭必須為Bearer ", required = true, in = ParameterIn.HEADER) })
 	@SaCheckLogin(type = StpKit.MEMBER_TYPE)
-	public R<List<Orders>> getOrderListForOwner() {
+	public R<List<OrdersVO>> getOrderListForOwner() {
 		Member memberCache = memberService.getMemberInfo();
-		List<Orders> ordersList = ordersService.getOrdersList(memberCache.getMemberId());
-		return R.ok(ordersList);
+		List<OrdersVO> ordersVOList = ordersService.getOrdersVOList(memberCache.getMemberId());
+		return R.ok(ordersVOList);
 	}
 
 	@GetMapping
@@ -86,9 +88,9 @@ public class OrdersController {
 	@Parameters({
 			@Parameter(name = "Authorization", description = "請求頭token,token-value開頭必須為Bearer ", required = true, in = ParameterIn.HEADER) })
 	@SaCheckRole("super-admin")
-	public R<List<Orders>> getOrderList() {
-		List<Orders> ordersList = ordersService.getOrdersList();
-		return R.ok(ordersList);
+	public R<List<OrdersVO>> getOrderList() {
+		List<OrdersVO> ordersVOList = ordersService.getOrdersVOList();
+		return R.ok(ordersVOList);
 	}
 
 	@GetMapping("pagination")
@@ -96,10 +98,10 @@ public class OrdersController {
 	@Parameters({
 			@Parameter(name = "Authorization", description = "請求頭token,token-value開頭必須為Bearer ", required = true, in = ParameterIn.HEADER) })
 	@SaCheckRole("super-admin")
-	public R<IPage<Orders>> getUserPage(@RequestParam Integer page, @RequestParam Integer size) {
+	public R<IPage<OrdersVO>> getUserPage(@RequestParam Integer page, @RequestParam Integer size) {
 		Page<Orders> pageable = new Page<Orders>(page, size);
-		IPage<Orders> ordersPage = ordersService.getOrdersPage(pageable);
-		return R.ok(ordersPage);
+		IPage<OrdersVO> ordersVOPage = ordersService.getOrdersVOPage(pageable);
+		return R.ok(ordersVOPage);
 	}
 
 	@PostMapping

@@ -9,8 +9,10 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 
+import tw.org.tsess.pojo.BO.OrderDraftBO;
 import tw.org.tsess.pojo.DTO.addEntityDTO.AddOrdersDTO;
 import tw.org.tsess.pojo.DTO.putEntityDTO.PutOrdersDTO;
+import tw.org.tsess.pojo.VO.OrdersVO;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
 
@@ -98,12 +100,13 @@ public interface OrdersService extends IService<Orders> {
 
 	/**
 	 * 創建註冊費訂單<br>
-	 * 付款狀態為 「未付款」
-	 * 
-	 * @param amount
+	 * 付款狀態為 「未付款」<br>
+	 * 訂單總額與明細皆來自草稿 , 可能包含註冊費以外的補繳常年會費
+	 *
+	 * @param draft
 	 * @param member
 	 */
-	void createRegistrationOrder(BigDecimal amount, Member member);
+	void createRegistrationOrder(OrderDraftBO draft, Member member);
 
 	/**
 	 * 創建 「免費」 註冊費訂單<br>
@@ -148,6 +151,46 @@ public interface OrdersService extends IService<Orders> {
 	List<Orders> getOrdersList(Long memberId);
 
 	IPage<Orders> getOrdersPage(Page<Orders> page);
+
+	/**
+	 * 將訂單組裝成帶明細的VO<br>
+	 * 明細一次查完後分組塞入 , 不會逐筆查詢
+	 *
+	 * @param ordersList
+	 * @return
+	 */
+	List<OrdersVO> toOrdersVOList(List<Orders> ordersList);
+
+	/**
+	 * 查詢單一訂單, 帶明細
+	 *
+	 * @param ordersId
+	 * @return
+	 */
+	OrdersVO getOrdersVO(Long ordersId);
+
+	/**
+	 * 查詢全部訂單, 帶明細
+	 *
+	 * @return
+	 */
+	List<OrdersVO> getOrdersVOList();
+
+	/**
+	 * 查詢會員自己全部的訂單, 帶明細
+	 *
+	 * @param memberId
+	 * @return
+	 */
+	List<OrdersVO> getOrdersVOList(Long memberId);
+
+	/**
+	 * 查詢全部訂單的分頁對象, 帶明細
+	 *
+	 * @param page
+	 * @return
+	 */
+	IPage<OrdersVO> getOrdersVOPage(Page<Orders> page);
 
 	Long addOrders(AddOrdersDTO addOrdersDTO);
 

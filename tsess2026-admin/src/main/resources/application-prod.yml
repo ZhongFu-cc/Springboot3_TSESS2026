@@ -223,7 +223,7 @@ project:
   # 語言，可選值zh_TW / en ，用於選擇中文信zh_TW 或 英文信en
   language: en
   # Banner 圖片
-  banner-url: https://tsess.org.tw/img/banner.jpg
+  banner-url: https://tsess.org.tw/img/banner.png
   # 群組相關，與一次寄送 email 數量有關
   group-size: 200
   # 報名模式，可選值: FREE / PREPAID / POSTPAID ，POSTPAID尚未實現
@@ -236,8 +236,8 @@ project:
     from: notify@tsess.org.tw
     # 寄件人顯示名稱
     from-name: TSESS 2026 Notification
-    # 回覆信箱
-    reply-to: tsess106@gmail.com
+    # 回覆信箱,寄信時這邊要與From相同,否則信譽分下降太多, 這邊是指信件中需要回覆的位置
+    reply-to: tsess201805@gmail.com
     # 付款相關
   payment:
     # 付款後客戶返回的頁面
@@ -259,18 +259,18 @@ project:
       # 第一階段早鳥，台灣人
       taiwan:
         # 要與 MemberCategoryEnum 的configKey對應，不能亂寫
-        member: 700
-        others: 600
-        non-member: 1000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 第一階段早鳥，外國人
       foreign:
-        member: 9600
-        others: 4800
-        non-member: 12800
+        member: 3200
+        others: 3200
+        non-member: 3200
         mvp: 0
         speaker: 0
         moderator: 0
@@ -279,18 +279,18 @@ project:
     early-bird-phase2:
       # 第二階段早鳥，台灣人
       taiwan:
-        member: 700
-        others: 600
-        non-member: 1000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 第二階段早鳥，外國人
       foreign:
-        member: 9600
-        others: 4800
-        non-member: 12800
+        member: 3200
+        others: 3200
+        non-member: 3200
         mvp: 0
         speaker: 0
         moderator: 0
@@ -299,18 +299,18 @@ project:
     early-bird-phase3:
       # 第三階段早鳥，台灣人
       taiwan:
-        member: 700
-        others: 600
-        non-member: 1000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 第三階段早鳥，外國人
       foreign:
-        member: 9600
-        others: 4800
-        non-member: 12800
+        member: 3200
+        others: 3200
+        non-member: 3200
         mvp: 0
         speaker: 0
         moderator: 0
@@ -320,17 +320,17 @@ project:
       # 一般階段，台灣人
       taiwan:
         member: 1000
-        others: 1200
-        non-member: 1500
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 一般階段，外國人
       foreign:
-        member: 12800
-        others: 6400
-        non-member: 16000
+        member: 4800
+        others: 4800
+        non-member: 4800
         mvp: 0
         speaker: 0
         moderator: 0
@@ -339,20 +339,19 @@ project:
     on-site:
       # 現場報名，台灣人
       taiwan:
-        member: 1500
-        others: 1800
-        non-member: 2000
+        member: 1000
+        others: 0
+        non-member: 4000
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
       # 現場報名，外國人
       foreign:
-        member: 12800
-        others: 6400
-        non-member: 16000
+        member: 4800
+        others: 4800
+        non-member: 4800
         mvp: 0
         speaker: 0
         moderator: 0
         staff: 0
-

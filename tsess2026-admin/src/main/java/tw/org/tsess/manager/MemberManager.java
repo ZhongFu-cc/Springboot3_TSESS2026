@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -36,6 +37,7 @@ import tw.org.tsess.enums.OrderStatusEnum;
 import tw.org.tsess.enums.RegistrationPhaseEnum;
 import tw.org.tsess.exception.CheckinRecordException;
 import tw.org.tsess.exception.MemberException;
+import tw.org.tsess.pojo.BO.InvoiceLineBO;
 import tw.org.tsess.pojo.entity.Attendees;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
@@ -43,6 +45,7 @@ import tw.org.tsess.pojo.entity.Setting;
 import tw.org.tsess.service.AttendeesService;
 import tw.org.tsess.service.CheckinRecordService;
 import tw.org.tsess.service.MemberService;
+import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
 import tw.org.tsess.service.SettingService;
 
@@ -50,6 +53,9 @@ import tw.org.tsess.service.SettingService;
 @RequiredArgsConstructor
 @Slf4j
 public class MemberManager {
+
+	@Value("${project.name}")
+	private String PROJECT_NAME;
 
 	@Value("${project.email.reply-to}")
 	private String EMAIL_REPLY_TO;
@@ -72,6 +78,7 @@ public class MemberManager {
 	private final RegistrationFeeConfig registrationFeeConfig;
 	private final MemberService memberService;
 	private final OrdersService ordersService;
+	private final OrdersItemService ordersItemService;
 	private final AttendeesService attendeesService;
 	private final CheckinRecordService checkinRecordService;
 	private final SettingService settingService;
@@ -169,8 +176,85 @@ public class MemberManager {
 	}
 
 	/**
+	 * 取得 Invoice(繳費證明) 的明細資料<br>
+	 * 一張註冊費訂單可能有多筆明細 (註冊費 + 補繳常年會費) , 金額逐筆由台幣換算成美金
+	 * <p>
+	 * 注意: 每筆小計各自四捨五入到分位會有進位誤差, 因此表頭的總金額請用
+	 * {@link #sumInvoiceLines(java.util.List)} 對這裡的結果加總, 不要拿訂單總額再除一次匯率,
+	 * 否則明細加總會與表頭對不起來
+	 *
+	 * @param ordersId
+	 * @return
+	 */
+	public List<InvoiceLineBO> getInvoiceLines(Long ordersId) {
+
+		BigDecimal rate = new BigDecimal(RATE);
+
+		return ordersItemService.getOrdersItemsByOrderId(ordersId).stream().map(ordersItem -> {
+
+			InvoiceLineBO invoiceLine = new InvoiceLineBO();
+			invoiceLine.setProductName(ordersItem.getProductName());
+			invoiceLine.setProductType(ordersItem.getProductType());
+			invoiceLine.setQuantity(ordersItem.getQuantity());
+			invoiceLine.setUnitPrice(this.toUsd(ordersItem.getUnitPrice(), rate));
+			invoiceLine.setSubtotal(this.toUsd(ordersItem.getSubtotal(), rate));
+
+			return invoiceLine;
+
+		}).toList();
+	}
+
+	/**
+	 * 團體報名專用的 Invoice 明細<br>
+	 * 團體報名的 orders_item 記的是「整團」的金額, 不是這位會員個人的份額,
+	 * 因此不能直接拿 {@link #getInvoiceLines(Long)} 的結果, 要用個人折扣後的金額另外組一筆
+	 *
+	 * @param usdAmount 個人折扣後的美金金額
+	 * @return
+	 */
+	private InvoiceLineBO toGroupInvoiceLine(BigDecimal usdAmount) {
+
+		InvoiceLineBO invoiceLine = new InvoiceLineBO();
+		invoiceLine.setProductType(OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
+		invoiceLine.setProductName(PROJECT_NAME + " " + OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
+		invoiceLine.setQuantity(1);
+		invoiceLine.setUnitPrice(usdAmount);
+		invoiceLine.setSubtotal(usdAmount);
+
+		return invoiceLine;
+	}
+
+	/**
+	 * Invoice 明細的美金總額<br>
+	 * 必須是各明細小計的加總, 才能保證表頭與明細一致
+	 *
+	 * @param invoiceLines
+	 * @return
+	 */
+	public BigDecimal sumInvoiceLines(List<InvoiceLineBO> invoiceLines) {
+		return invoiceLines.stream()
+				.map(InvoiceLineBO::getSubtotal)
+				.reduce(BigDecimal.ZERO, BigDecimal::add)
+				.setScale(2, RoundingMode.HALF_UP);
+	}
+
+	/**
+	 * 台幣換算美金, 保留兩位小數, 四捨五入
+	 *
+	 * @param twdAmount
+	 * @param rate
+	 * @return
+	 */
+	private BigDecimal toUsd(BigDecimal twdAmount, BigDecimal rate) {
+		if (twdAmount == null) {
+			return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+		}
+		return twdAmount.divide(rate, 2, RoundingMode.HALF_UP);
+	}
+
+	/**
 	 * 產生繳費證明
-	 * 
+	 *
 	 * @param response
 	 * @param memberId
 	 * @throws IOException
@@ -223,7 +307,9 @@ public class MemberManager {
 			BigDecimal twdAmount = order.getTotalAmount();
 
 			// 5-6 如果itemsSummary為Group Registration Fee , 代表是團體報名 , 那台幣金額要重算
-			if (order.getItemsSummary().equals(OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION)) {
+			boolean isGroupRegistration = order.getItemsSummary()
+					.equals(OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
+			if (isGroupRegistration) {
 
 				// 1.拿到配置設定,知道處於哪個註冊階段
 				RegistrationPhaseEnum registrationPhaseEnum = settingService
@@ -256,6 +342,22 @@ public class MemberManager {
 			parameters.put("subReport", subReportInputStream);
 
 			parameters.put("orderItems", Arrays.asList(order));
+
+			/**
+			 * 5-8 Invoice 的逐筆明細<br>
+			 * 一張註冊費訂單可能有 註冊費 + 113/114/115 各年度的補繳常年會費, 最多 4 筆<br>
+			 * 子報表把資料源換成 $P{invoiceLines} 就會逐筆列出, 可用的欄位見 InvoiceLineBO:<br>
+			 * productName / productType / quantity / unitPrice / subtotal (金額皆為美金)<br>
+			 * <p>
+			 * 表頭總額請改用 $P{invoiceLinesTotal} , 它是各明細小計的加總;<br>
+			 * 沿用舊的 $P{totalAmount} 會因為每筆各自四捨五入而與明細加總差幾分錢
+			 */
+			List<InvoiceLineBO> invoiceLines = isGroupRegistration
+					? List.of(this.toGroupInvoiceLine(usdAmount))
+					: this.getInvoiceLines(order.getOrdersId());
+
+			parameters.put("invoiceLines", invoiceLines);
+			parameters.put("invoiceLinesTotal", this.sumInvoiceLines(invoiceLines));
 
 			/**
 			 * 填充報表

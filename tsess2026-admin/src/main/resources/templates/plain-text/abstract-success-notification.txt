@@ -1,4 +1,4 @@
-Dear [(${paper.correspondingAuthor})],
+Dear [(${paper.firstAuthor})],
 
 Thank you for submitting your abstract. We have successfully received your submission.
 

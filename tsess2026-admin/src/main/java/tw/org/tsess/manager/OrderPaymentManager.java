@@ -4,7 +4,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,11 +28,13 @@ import tw.org.tsess.pojo.DTO.ECPayDTO.ECPayResponseDTO;
 import tw.org.tsess.pojo.entity.Attendees;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
+import tw.org.tsess.pojo.entity.OrdersItem;
 import tw.org.tsess.pojo.entity.Payment;
 import tw.org.tsess.service.AttendeesService;
 import tw.org.tsess.service.AttendeesTagService;
 import tw.org.tsess.service.MemberService;
 import tw.org.tsess.service.MemberTagService;
+import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
 import tw.org.tsess.service.PaymentService;
 import tw.org.tsess.service.SettingService;
@@ -55,6 +59,7 @@ public class OrderPaymentManager {
 	private final MemberService memberService;
 	private final MemberTagService memberTagService;
 	private final OrdersService ordersService;
+	private final OrdersItemService ordersItemService;
 	private final PaymentService paymentService;
 	private final AttendeesService attendeesService;
 	private final AttendeesTagService attendeesTagService;
@@ -116,8 +121,28 @@ public class OrderPaymentManager {
 	}
 
 	/**
+	 * 產生綠界的交易產品名稱<br>
+	 * 綠界無法一個item對應一個amount , 但可以用 # 分段顯示多個品項<br>
+	 * 沒有明細時退回使用訂單的商品統稱
+	 *
+	 * @param order
+	 * @return
+	 */
+	private String generateItemName(Orders order) {
+
+		List<OrdersItem> ordersItemList = ordersItemService.getOrdersItemsByOrderId(order.getOrdersId());
+
+		String itemName = ordersItemList.stream()
+				.map(OrdersItem::getProductName)
+				.filter(StringUtils::isNotBlank)
+				.collect(Collectors.joining("#"));
+
+		return StringUtils.isNotBlank(itemName) ? itemName : order.getItemsSummary();
+	}
+
+	/**
 	 * 產生付款頁面
-	 * 
+	 *
 	 * @param orderId
 	 * @return
 	 */
@@ -160,7 +185,8 @@ public class OrderPaymentManager {
 				"This payment page only displays the total order amount. For details, please see the website membership page");
 		// 設定交易產品名稱概要,他沒有辦法一個item對應一個amount , 但可以透過#將item分段顯示
 		// 例如: item01#item02#item03
-		aioCheckOutOneTime.setItemName(order.getItemsSummary());
+		// 一張註冊費訂單可能有多筆明細(註冊費 + 補繳常年會費) , 這邊把品名串起來讓付款頁看得到
+		aioCheckOutOneTime.setItemName(this.generateItemName(order));
 		// 設定付款完成後，返回的前端網址，這邊讓他回到官網
 		aioCheckOutOneTime.setClientBackURL(CLIENT_BACK_URL);
 		// 設定付款完成通知的網址,應該可以直接設定成後端API，實證有效

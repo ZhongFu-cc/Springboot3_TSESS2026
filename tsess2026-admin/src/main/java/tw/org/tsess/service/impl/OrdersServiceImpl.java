@@ -1,6 +1,7 @@
 package tw.org.tsess.service.impl;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,20 +22,32 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.RequiredArgsConstructor;
 import tw.org.tsess.constants.OrderConstants;
 import tw.org.tsess.convert.OrdersConvert;
+import tw.org.tsess.convert.OrdersItemConvert;
+import tw.org.tsess.enums.MembershipDueYearEnum;
 import tw.org.tsess.enums.OrderStatusEnum;
 import tw.org.tsess.mapper.OrdersMapper;
+import tw.org.tsess.pojo.BO.MembershipDueYearBO;
+import tw.org.tsess.pojo.BO.OrderDraftBO;
+import tw.org.tsess.pojo.BO.OrderLineBO;
 import tw.org.tsess.pojo.DTO.addEntityDTO.AddOrdersDTO;
 import tw.org.tsess.pojo.DTO.putEntityDTO.PutOrdersDTO;
+import tw.org.tsess.pojo.VO.OrdersVO;
 import tw.org.tsess.pojo.entity.Member;
 import tw.org.tsess.pojo.entity.Orders;
+import tw.org.tsess.pojo.entity.OrdersItem;
 import tw.org.tsess.service.OrdersItemService;
 import tw.org.tsess.service.OrdersService;
+import tw.org.tsess.utils.OrdersItemUtil;
 
 @Service
 @RequiredArgsConstructor
 public class OrdersServiceImpl extends ServiceImpl<OrdersMapper, Orders> implements OrdersService {
 
+	@Value("${project.name}")
+	private String PROJECT_NAME;
+
 	private final OrdersConvert ordersConvert;
+	private final OrdersItemConvert ordersItemConvert;
 	private final OrdersItemService ordersItemService;
 
 	@Override
@@ -169,22 +183,24 @@ public class OrdersServiceImpl extends ServiceImpl<OrdersMapper, Orders> impleme
 	}
 
 	@Override
-	public void createRegistrationOrder(BigDecimal amount, Member member) {
+	public void createRegistrationOrder(OrderDraftBO draft, Member member) {
 		// 1.新建 註冊費 訂單
 		Orders order = new Orders();
 		// 2.設定會員ID
 		order.setMemberId(member.getMemberId());
 		// 3.設定這筆訂單商品的統稱
+		// 注意: items_summary 固定為 Registration Fee , 它被當成「這是不是註冊費訂單」的查詢條件,
+		// 即使這張訂單含補繳常年會費也不能改, 品項差異看 orders_item
 		order.setItemsSummary(OrderConstants.ITEMS_SUMMARY_REGISTRATION);
 		// 4.設定繳費狀態為 未繳費(0)
 		order.setStatus(OrderStatusEnum.UNPAID.getValue());
-		// 5.設定金額
-		order.setTotalAmount(amount);
+		// 5.設定金額, 為各明細小計加總
+		order.setTotalAmount(draft.getTotalAmount());
 		// 6.透過訂單服務 新增訂單
 		baseMapper.insert(order);
 
-		// 7.創建註冊費訂單細項
-		ordersItemService.createRegistrationOrderItem(order);
+		// 7.創建註冊費訂單細項 (註冊費 + 可能的補繳常年會費)
+		ordersItemService.createRegistrationOrderItems(order.getOrdersId(), draft.getLines());
 
 	}
 
@@ -203,8 +219,10 @@ public class OrdersServiceImpl extends ServiceImpl<OrdersMapper, Orders> impleme
 		// 6.透過訂單服務 新增訂單
 		baseMapper.insert(order);
 
-		// 7.創建註冊費訂單細項
-		ordersItemService.createRegistrationOrderItem(order);
+		// 7.創建註冊費訂單細項 , 免費訂單仍留一筆 0 元明細
+		ordersItemService.createRegistrationOrderItems(order.getOrdersId(),
+				List.of(OrderLineBO.ofSingle(OrderConstants.ITEMS_SUMMARY_REGISTRATION,
+						PROJECT_NAME + " " + OrderConstants.ITEMS_SUMMARY_REGISTRATION, BigDecimal.ZERO)));
 
 	}
 
@@ -299,6 +317,97 @@ public class OrdersServiceImpl extends ServiceImpl<OrdersMapper, Orders> impleme
 	public IPage<Orders> getOrdersPage(Page<Orders> page) {
 		Page<Orders> ordersPage = baseMapper.selectPage(page, null);
 		return ordersPage;
+	}
+
+	@Override
+	public List<OrdersVO> toOrdersVOList(List<Orders> ordersList) {
+
+		// 1.沒有訂單直接返回空列表
+		if (ordersList == null || ordersList.isEmpty()) {
+			return Collections.emptyList();
+		}
+
+		// 2.先轉出訂單本身的VO
+		List<OrdersVO> ordersVOList = ordersConvert.entityListToVOList(ordersList);
+
+		// 3.一次撈完這批訂單的所有明細, 避免逐筆查詢造成 N+1
+		List<Long> ordersIds = ordersList.stream().map(Orders::getOrdersId).toList();
+		Map<Long, List<OrdersItem>> ordersItemMap = ordersItemService.getOrdersItemsByOrderIds(ordersIds);
+
+		// 4.依 ordersId 把明細塞回對應的VO, 沒有明細的訂單給空列表而非null
+		for (OrdersVO ordersVO : ordersVOList) {
+			List<OrdersItem> ordersItemList = ordersItemMap.getOrDefault(ordersVO.getOrdersId(), Collections.emptyList());
+			ordersVO.setOrdersItemList(ordersItemConvert.entityListToVOList(ordersItemList));
+
+			// 5.由明細拆出報名費 與 分年的補繳常年會費, 讓前端不必自己解析 productType
+			this.fillFeeBreakdown(ordersVO, ordersItemList);
+		}
+
+		return ordersVOList;
+	}
+
+	/**
+	 * 依明細的產品類型, 拆出報名費與各年度的補繳常年會費<br>
+	 * 欄位結構刻意與註冊前的費用試算 API 一致, 前端可以共用同一套顯示元件
+	 *
+	 * @param ordersVO
+	 * @param ordersItemList
+	 */
+	private void fillFeeBreakdown(OrdersVO ordersVO, List<OrdersItem> ordersItemList) {
+
+		// 1.報名費, 個人與團體報名的產品類型不同, 兩者都算進來
+		ordersVO.setRegistrationFee(OrdersItemUtil.sumByProductType(ordersItemList,
+				OrderConstants.ITEMS_SUMMARY_REGISTRATION, OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION));
+
+		// 2.逐年加總補繳的常年會費
+		List<MembershipDueYearBO> membershipDueDetails = new ArrayList<>();
+		BigDecimal membershipDue = BigDecimal.ZERO;
+
+		for (MembershipDueYearEnum membershipDueYearEnum : MembershipDueYearEnum.values()) {
+			BigDecimal amount = OrdersItemUtil.sumByProductType(ordersItemList,
+					OrderConstants.membershipDueProductType(membershipDueYearEnum.getRocYear()));
+			membershipDueDetails.add(MembershipDueYearBO.of(membershipDueYearEnum, amount));
+			membershipDue = membershipDue.add(amount);
+		}
+
+		ordersVO.setMembershipDue(membershipDue);
+
+		// 3.完全沒有會費項目時回空陣列, 不要給三筆 0 元讓前端誤以為有欠費紀錄
+		ordersVO.setMembershipDueDetails(
+				membershipDue.compareTo(BigDecimal.ZERO) > 0 ? membershipDueDetails : List.of());
+	}
+
+
+	@Override
+	public OrdersVO getOrdersVO(Long ordersId) {
+		Orders orders = baseMapper.selectById(ordersId);
+		if (orders == null) {
+			return null;
+		}
+		return this.toOrdersVOList(List.of(orders)).get(0);
+	}
+
+	@Override
+	public List<OrdersVO> getOrdersVOList() {
+		return this.toOrdersVOList(this.getOrdersList());
+	}
+
+	@Override
+	public List<OrdersVO> getOrdersVOList(Long memberId) {
+		return this.toOrdersVOList(this.getOrdersList(memberId));
+	}
+
+	@Override
+	public IPage<OrdersVO> getOrdersVOPage(Page<Orders> page) {
+
+		// 1.先拿到訂單本身的分頁對象
+		Page<Orders> ordersPage = baseMapper.selectPage(page, null);
+
+		// 2.保留分頁資訊, 只替換掉records
+		Page<OrdersVO> ordersVOPage = new Page<>(ordersPage.getCurrent(), ordersPage.getSize(), ordersPage.getTotal());
+		ordersVOPage.setRecords(this.toOrdersVOList(ordersPage.getRecords()));
+
+		return ordersVOPage;
 	}
 
 	@Override
