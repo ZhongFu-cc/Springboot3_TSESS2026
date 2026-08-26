@@ -1,4 +1,4 @@
-Dear [(${paper.correspondingAuthor})]，
+Dear [(${paper.firstAuthor})]，
 
 感謝您提交您的摘要。我們已成功收到您的提交。
 

@@ -213,11 +213,11 @@ public class MemberOrderManager {
 			BigDecimal registrationFee = OrdersItemUtil.sumByProductType(ordersItemList,
 					OrderConstants.ITEMS_SUMMARY_REGISTRATION, OrderConstants.GROUP_ITEMS_SUMMARY_REGISTRATION);
 			BigDecimal membershipDue113 = OrdersItemUtil.sumByProductType(ordersItemList,
-					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_113.getAdYear()));
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_113.getRocYear()));
 			BigDecimal membershipDue114 = OrdersItemUtil.sumByProductType(ordersItemList,
-					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_114.getAdYear()));
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_114.getRocYear()));
 			BigDecimal membershipDue115 = OrdersItemUtil.sumByProductType(ordersItemList,
-					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_115.getAdYear()));
+					OrderConstants.membershipDueProductType(MembershipDueYearEnum.ROC_115.getRocYear()));
 
 			// 5-3 轉換設置資料
 			MemberExcelRaw memberExcelRaw = memberConvert.entityToExcelRaw(member);

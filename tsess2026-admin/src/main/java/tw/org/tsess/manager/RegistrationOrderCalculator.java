@@ -84,8 +84,8 @@ public class RegistrationOrderCalculator {
 		for (MembershipDueYearBO membershipDueYear : membershipDueYears) {
 			if (membershipDueYear.getAmount().compareTo(BigDecimal.ZERO) > 0) {
 				lines.add(OrderLineBO.ofSingle(
-						OrderConstants.membershipDueProductType(membershipDueYear.getAdYear()),
-						OrderConstants.membershipDueProductName(membershipDueYear.getAdYear()),
+						OrderConstants.membershipDueProductType(membershipDueYear.getRocYear()),
+						OrderConstants.membershipDueProductName(membershipDueYear.getRocYear()),
 						membershipDueYear.getAmount()));
 			}
 		}

@@ -223,7 +223,7 @@ project:
   # 語言，可選值zh_TW / en ，用於選擇中文信zh_TW 或 英文信en
   language: en
   # Banner 圖片
-  banner-url: https://tsess.org.tw/img/banner.jpg
+  banner-url: https://tsess.org.tw/img/banner.png
   # 群組相關，與一次寄送 email 數量有關
   group-size: 200
   # 報名模式，可選值: FREE / PREPAID / POSTPAID ，POSTPAID尚未實現
@@ -236,8 +236,8 @@ project:
     from: notify@tsess.org.tw
     # 寄件人顯示名稱
     from-name: TSESS 2026 Notification
-    # 回覆信箱
-    reply-to: tsess106@gmail.com
+    # 回覆信箱,寄信時這邊要與From相同,否則信譽分下降太多, 這邊是指信件中需要回覆的位置
+    reply-to: tsess201805@gmail.com
     # 付款相關
   payment:
     # 付款後客戶返回的頁面
