@@ -62,7 +62,10 @@ public class AddGroupMemberDTO {
 	@NotBlank
 	@Schema(description = "電話號碼,這邊要使用 國碼-號碼")
 	private String phone;
-	
+
+	@Schema(description = "統一編號")
+	private String taxId;
+
 	@NotBlank
 	@Schema(description = "餐食調查，填寫葷 或 素")
 	private String food;

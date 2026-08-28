@@ -93,6 +93,10 @@ public class Member implements Serializable {
 	@TableField("receipt")
 	private String receipt;
 
+	@Schema(description = "統一編號")
+	@TableField("tax_id")
+	private String taxId;
+
 	@Schema(description = "餐食調查，填寫葷 或 素")
 	@TableField("food")
 	private String food;
