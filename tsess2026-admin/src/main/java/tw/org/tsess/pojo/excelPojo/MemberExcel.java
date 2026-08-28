@@ -53,6 +53,9 @@ public class MemberExcel {
 	@ExcelProperty("收據抬頭統編")
 	private String receipt;
 
+	@ExcelProperty("統一編號")
+	private String taxId;
+
 	@ExcelProperty("餐食調查")
 	private String food;
 

@@ -63,7 +63,10 @@ public class AddMemberDTO {
 
 	@Schema(description = "收據抬頭統編")
 	private String receipt;
-	
+
+	@Schema(description = "統一編號")
+	private String taxId;
+
 	@NotBlank
 	@Schema(description = "餐食調查，填寫葷 或 素")
 	private String food;
