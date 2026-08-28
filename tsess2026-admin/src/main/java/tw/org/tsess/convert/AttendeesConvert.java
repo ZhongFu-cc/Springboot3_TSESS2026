@@ -39,6 +39,7 @@ public interface AttendeesConvert {
 	@Mapping(source = "member.jobTitle", target = "jobTitle")
 	@Mapping(source = "member.phone", target = "phone")
 	@Mapping(source = "member.receipt", target = "receipt")
+	@Mapping(source = "member.taxId", target = "taxId")
 	@Mapping(source = "member.food", target = "food")
 	@Mapping(source = "member.foodTaboo", target = "foodTaboo")
 	@Mapping(source = "member.category", target = "category", qualifiedByName = "convertCategory")
