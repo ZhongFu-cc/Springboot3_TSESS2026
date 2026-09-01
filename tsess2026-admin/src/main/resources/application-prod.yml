@@ -260,7 +260,7 @@ project:
       taiwan:
         # 要與 MemberCategoryEnum 的configKey對應，不能亂寫
         member: 1000
-        others: 0
+        others: 4000
         non-member: 4000
         mvp: 0
         speaker: 0
@@ -280,7 +280,7 @@ project:
       # 第二階段早鳥，台灣人
       taiwan:
         member: 1000
-        others: 0
+        others: 4000
         non-member: 4000
         mvp: 0
         speaker: 0
@@ -300,7 +300,7 @@ project:
       # 第三階段早鳥，台灣人
       taiwan:
         member: 1000
-        others: 0
+        others: 4000
         non-member: 4000
         mvp: 0
         speaker: 0
@@ -320,7 +320,7 @@ project:
       # 一般階段，台灣人
       taiwan:
         member: 1000
-        others: 0
+        others: 4000
         non-member: 4000
         mvp: 0
         speaker: 0
@@ -340,7 +340,7 @@ project:
       # 現場報名，台灣人
       taiwan:
         member: 1000
-        others: 0
+        others: 4000
         non-member: 4000
         mvp: 0
         speaker: 0
