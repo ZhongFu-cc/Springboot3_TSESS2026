@@ -40,8 +40,10 @@ import tw.org.tsess.exception.RegistrationInfoException;
 import tw.org.tsess.manager.MemberAuthManager;
 import tw.org.tsess.manager.MemberManager;
 import tw.org.tsess.manager.MemberOrderManager;
+import tw.org.tsess.manager.MemberReceiptManager;
 import tw.org.tsess.manager.MemberRegistrationManager;
 import tw.org.tsess.manager.MemberTagManager;
+import tw.org.tsess.pojo.BO.ReceiptBO;
 import tw.org.tsess.pojo.DTO.AddMemberForAdminDTO;
 import tw.org.tsess.pojo.DTO.ForgetPwdDTO;
 import tw.org.tsess.pojo.DTO.GroupRegistrationDTO;
@@ -78,6 +80,7 @@ public class MemberController {
 	private final MemberRegistrationManager memberRegistrationManager;
 	private final MemberAuthManager memberAuthManager;
 	private final MemberTagManager memberTagManager;
+	private final MemberReceiptManager memberReceiptManager;
 	private final MemberManager memberManager;
 
 	@GetMapping("/captcha")
@@ -460,6 +463,27 @@ public class MemberController {
 
 		// 2.將會員ID 及 響應Servlet給Manager 由它創建參加證明
 		memberManager.generateConferenceInvoice(response, memberInfo.getMemberId());
+
+	}
+
+	/**
+	 * 產生學會收據，測試時不能使用 knife4j 或者 swagger
+	 *
+	 * @param response
+	 * @throws IOException
+	 */
+	@Operation(summary = "產生學會收據")
+	@SaCheckLogin(type = StpKit.MEMBER_TYPE)
+	@Parameters({
+			@Parameter(name = "Authorization-member", description = "請求頭token,token-value開頭必須為Bearer ", required = true, in = ParameterIn.HEADER), })
+	@GetMapping("receipt")
+	public void generateReceipt(HttpServletResponse response) throws IOException {
+
+		// 1.獲取token 對應會員資料
+		Member memberInfo = memberAuthManager.getMemberInfo();
+
+		// 2.將會員ID 及 響應Servlet給Manager 由它創建收據
+		memberReceiptManager.generateReceipt(response, memberInfo.getMemberId());
 
 	}
 

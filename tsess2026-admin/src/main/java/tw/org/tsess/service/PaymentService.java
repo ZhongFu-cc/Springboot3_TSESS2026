@@ -24,6 +24,15 @@ public interface PaymentService extends IService<Payment> {
 
 	void deletePayment(Long paymentId);
 
+	/**
+	 * 依訂單ID查詢付款紀錄, 取交易成功 (rtn_code = 1) 且付款日期最新的一筆<br>
+	 * 查無 (例如人工確認收款, 沒有走綠界) 時回傳 null
+	 *
+	 * @param ordersId
+	 * @return
+	 */
+	Payment getLatestSuccessPaymentByOrdersId(Long ordersId);
+
 	void deletePaymentList(List<Long> paymentIds);
 
 }
