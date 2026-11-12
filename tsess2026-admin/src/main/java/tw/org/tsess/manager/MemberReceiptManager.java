@@ -3,6 +3,7 @@ package tw.org.tsess.manager;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -164,6 +165,7 @@ public class MemberReceiptManager {
 		// 4.收據號碼取自與會者資料, 由學會用 Excel 模板批量匯入,
 		// 還沒匯入的人這格會留白
 		Attendees attendees = attendeesService.getAttendeesByMemberId(memberId);
+
 		receipt.setReceiptNo(attendees == null ? null : StringUtils.trimToNull(attendees.getReceiptNo()));
 
 		// 5.繳款人姓名, 收據是中文版面, 優先用中文姓名, 外籍會員沒有中文名才退回英文姓名
@@ -212,7 +214,8 @@ public class MemberReceiptManager {
 	 * <p>
 	 * 可用的 key:<br>
 	 * RECEIPT_NO / PAYER_NAME / MEMBER_NO / TAX_ID<br>
-	 * REGISTRATION_FEE / MEMBERSHIP_DUE_YEAR_TEXT / MEMBERSHIP_DUE_AMOUNT / TOTAL_AMOUNT<br>
+	 * REGISTRATION_FEE / MEMBERSHIP_DUE_YEAR_TEXT / MEMBERSHIP_DUE_AMOUNT /
+	 * TOTAL_AMOUNT<br>
 	 * PAID_ROC_YEAR / PAID_MONTH / PAID_DAY
 	 * <p>
 	 * 收據上沒有「入會費」「其他 (Other)」「逐年常年會費」的位置, 因此不提供對應參數,
@@ -230,21 +233,49 @@ public class MemberReceiptManager {
 		ReceiptBO receipt = this.buildReceipt(memberId);
 
 		Map<String, Object> parameters = new HashMap<>();
-		parameters.put("RECEIPT_NO", receipt.getReceiptNo());
-		parameters.put("PAYER_NAME", receipt.getPayerName());
-		parameters.put("MEMBER_NO", receipt.getMemberNo());
-		parameters.put("TAX_ID", receipt.getTaxId());
 
-		parameters.put("REGISTRATION_FEE", receipt.getRegistrationFee());
-		parameters.put("MEMBERSHIP_DUE_YEAR_TEXT", receipt.getMembershipDueYearText());
-		parameters.put("MEMBERSHIP_DUE_AMOUNT", receipt.getMembershipDueAmount());
-		parameters.put("TOTAL_AMOUNT", receipt.getTotalAmount());
+		// 字串欄位一律以空字串代替 null , 模板的 textField 沒設 blankWhenNull 時,
+		// 傳 null 會在收據上印出 "null" 四個字
+		parameters.put("RECEIPT_NO", this.blankIfNull(receipt.getReceiptNo()));
+		parameters.put("PAYER_NAME", this.blankIfNull(receipt.getPayerName()));
+		parameters.put("MEMBER_NO", this.blankIfNull(receipt.getMemberNo()));
+		parameters.put("TAX_ID", this.blankIfNull(receipt.getTaxId()));
+		parameters.put("MEMBERSHIP_DUE_YEAR_TEXT", this.blankIfNull(receipt.getMembershipDueYearText()));
 
-		parameters.put("PAID_ROC_YEAR", receipt.getPaidRocYear());
-		parameters.put("PAID_MONTH", receipt.getPaidMonth());
-		parameters.put("PAID_DAY", receipt.getPaidDay());
+		// 金額一律去掉小數位, 收據上不印 .00
+		parameters.put("REGISTRATION_FEE", this.toWholeAmount(receipt.getRegistrationFee()));
+		parameters.put("MEMBERSHIP_DUE_AMOUNT", this.toWholeAmount(receipt.getMembershipDueAmount()));
+		parameters.put("TOTAL_AMOUNT", this.toWholeAmount(receipt.getTotalAmount()));
+
+		parameters.put("PAID_ROC_YEAR", this.blankIfNull(receipt.getPaidRocYear()));
+		parameters.put("PAID_MONTH", this.blankIfNull(receipt.getPaidMonth()));
+		parameters.put("PAID_DAY", this.blankIfNull(receipt.getPaidDay()));
 
 		return parameters;
+	}
+
+	/**
+	 * null 轉成空字串, 讓收據上該格留白而不是印出 "null"
+	 *
+	 * @param value
+	 * @return
+	 */
+	private String blankIfNull(String value) {
+		return value == null ? "" : value;
+	}
+
+	/**
+	 * 金額去掉小數位<br>
+	 * DB 的金額欄位是 decimal , 取出來會是 4000.00 , 收據上只要整數,
+	 * 學會的費用都是整百整千, 不會有實際的小數, 這裡用四捨五入保險
+	 * <p>
+	 * 金額為 null 時回傳 null , 代表該項沒有費用, 模板需設 blankWhenNull 才不會印出 "null"
+	 *
+	 * @param amount
+	 * @return
+	 */
+	private BigDecimal toWholeAmount(BigDecimal amount) {
+		return amount == null ? null : amount.setScale(0, RoundingMode.HALF_UP);
 	}
 
 	/**
@@ -305,8 +336,7 @@ public class MemberReceiptManager {
 				continue;
 			}
 
-			membershipDueYears
-					.add(new MembershipDueYearBO(rocYear, RocDateUtil.toAdYear(rocYear), subtotal));
+			membershipDueYears.add(new MembershipDueYearBO(rocYear, RocDateUtil.toAdYear(rocYear), subtotal));
 		}
 
 		membershipDueYears.sort((a, b) -> a.getRocYear().compareTo(b.getRocYear()));
