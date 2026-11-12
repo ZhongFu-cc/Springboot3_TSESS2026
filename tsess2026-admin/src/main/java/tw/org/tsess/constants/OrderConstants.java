@@ -34,4 +34,33 @@ public final class OrderConstants {
 	public static String membershipDueProductName(Integer rocYear) {
 		return MEMBERSHIP_DUE + " (" + rocYear + ")";
 	}
+
+	/**
+	 * 判斷此明細的產品類型是否為「補繳常年會費」<br>
+	 * 例如 "常年會費 113"
+	 *
+	 * @param productType
+	 * @return
+	 */
+	public static boolean isMembershipDueProductType(String productType) {
+		return productType != null && productType.startsWith(MEMBERSHIP_DUE + " ");
+	}
+
+	/**
+	 * 從補繳常年會費的產品類型解析出民國年<br>
+	 * 例如 "常年會費 113" 會得到 113 , 格式不符時回傳 null
+	 *
+	 * @param productType
+	 * @return
+	 */
+	public static Integer parseMembershipDueRocYear(String productType) {
+		if (!isMembershipDueProductType(productType)) {
+			return null;
+		}
+		try {
+			return Integer.valueOf(productType.substring((MEMBERSHIP_DUE + " ").length()).trim());
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
 }

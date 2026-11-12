@@ -2,6 +2,8 @@ package tw.org.tsess.service.impl;
 
 import java.util.List;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+
 import org.springframework.stereotype.Service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -58,6 +60,24 @@ public class PaymentServiceImpl extends ServiceImpl<PaymentMapper, Payment> impl
 	@Override
 	public void deletePaymentList(List<Long> paymentIds) {
 		baseMapper.deleteBatchIds(paymentIds);
+	}
+
+	@Override
+	public Payment getLatestSuccessPaymentByOrdersId(Long ordersId) {
+
+		if (ordersId == null) {
+			return null;
+		}
+
+		// 交易狀態 rtn_code 為 "1" 才算成功, 同一張訂單理論上只會有一筆,
+		// 仍以付款日期由新到舊取第一筆保險
+		LambdaQueryWrapper<Payment> paymentWrapper = new LambdaQueryWrapper<>();
+		paymentWrapper.eq(Payment::getOrdersId, ordersId)
+				.eq(Payment::getRtnCode, "1")
+				.orderByDesc(Payment::getPaymentDate)
+				.last("LIMIT 1");
+
+		return baseMapper.selectOne(paymentWrapper);
 	}
 
 	@Override
