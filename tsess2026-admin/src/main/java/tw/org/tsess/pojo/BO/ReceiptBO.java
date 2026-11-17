@@ -20,6 +20,12 @@ public class ReceiptBO {
 	@Schema(description = "收據號碼, 取自 attendees.receipt_no (學會以 Excel 批量匯入), 未匯入則為 null")
 	private String receiptNo;
 
+	@Schema(description = "收據流水號, 例如 \"E-5606\", 由前綴 + attendees.sequence_no 組成, 查無與會者資料則為 null")
+	private String serialNo;
+
+	@Schema(description = "與會者流水序號 (attendees.sequence_no) 的原始值, 供後台對帳用, 收據上印的是 serialNo")
+	private Integer sequenceNo;
+
 	@Schema(description = "訂單ID, 供後台對帳用, 不印在收據上")
 	private Long ordersId;
 
