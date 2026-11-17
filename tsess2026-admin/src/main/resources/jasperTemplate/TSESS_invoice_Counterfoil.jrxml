@@ -17,7 +17,7 @@
 	<query language="sql"><![CDATA[]]></query>
 	<title height="842" splitType="Stretch">
 		<element kind="image" uuid="c7a2fb75-a7dc-471a-adf0-3726d4f72905" x="0" y="0" width="595" height="842">
-			<expression><![CDATA["D:/案件/2026年會/TSESS2026/invoice/TSESS_Receipt_Customer-Copy.png"]]></expression>
+			<expression><![CDATA[$P{BG_IMAGE}]]></expression>
 			<property name="com.jaspersoft.studio.unit.x" value="px"/>
 			<property name="com.jaspersoft.studio.unit.height" value="px"/>
 		</element>
