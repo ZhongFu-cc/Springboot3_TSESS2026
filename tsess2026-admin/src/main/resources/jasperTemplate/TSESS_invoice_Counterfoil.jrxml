@@ -1,0 +1,69 @@
+<!-- Created with Jaspersoft Studio version 7.0.3.final using JasperReports Library version 7.0.3-41034ca841d452f3305ba55b9042260aaa1ab5dd  -->
+<jasperReport name="Blank_A4" language="java" pageWidth="595" pageHeight="842" columnWidth="595" leftMargin="0" rightMargin="0" topMargin="0" bottomMargin="0" uuid="511ba648-40e1-4866-bf4b-43390e795edb">
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+	<parameter name="BG_IMAGE" class="java.lang.String"/>
+	<parameter name="RECEIPT_NO" class="java.lang.String"/>
+	<parameter name="PAYER_NAME" class="java.lang.String"/>
+	<parameter name="MEMBER_NO" class="java.lang.String"/>
+	<parameter name="TAX_ID" class="java.lang.String"/>
+	<parameter name="MEMBERSHIP_DUE_AMOUNT" class="java.math.BigDecimal"/>
+	<parameter name="REGISTRATION_FEE" class="java.math.BigDecimal"/>
+	<parameter name="MEMBERSHIP_DUE_YEAR_TEXT" class="java.lang.String"/>
+	<parameter name="TOTAL_AMOUNT" class="java.math.BigDecimal"/>
+	<parameter name="PAID_ROC_YEAR" class="java.lang.String"/>
+	<parameter name="PAID_MONTH" class="java.lang.String"/>
+	<parameter name="PAID_DAY" class="java.lang.String"/>
+	<parameter name="SERIAL_NO" class="java.lang.String"/>
+	<query language="sql"><![CDATA[]]></query>
+	<title height="842" splitType="Stretch">
+		<element kind="image" uuid="c7a2fb75-a7dc-471a-adf0-3726d4f72905" x="0" y="0" width="595" height="842">
+			<expression><![CDATA["D:/案件/2026年會/TSESS2026/invoice/TSESS_Receipt_Customer-Copy.png"]]></expression>
+			<property name="com.jaspersoft.studio.unit.x" value="px"/>
+			<property name="com.jaspersoft.studio.unit.height" value="px"/>
+		</element>
+		<element kind="staticText" uuid="ced6d5d0-5d9b-45b0-88d7-73a35fc2b333" x="48" y="112" width="20" height="30" forecolor="#000000" fontName="DejaVu Sans" fontSize="20.0">
+			<text><![CDATA[✓]]></text>
+		</element>
+		<element kind="staticText" uuid="f21138fe-67ab-4db8-a45c-c3a167ae4bc9" x="224" y="112" width="20" height="30" forecolor="#000000" fontName="DejaVu Sans" fontSize="20.0">
+			<text><![CDATA[✓]]></text>
+			<property name="com.jaspersoft.studio.unit.width" value="px"/>
+			<property name="com.jaspersoft.studio.unit.height" value="px"/>
+			<property name="com.jaspersoft.studio.unit.y" value="px"/>
+			<property name="com.jaspersoft.studio.unit.x" value="px"/>
+		</element>
+		<element kind="textField" uuid="a504b1c9-eaf4-48f5-acac-4ffd499fb29f" x="98" y="113" width="100" height="19" fontName="新細明體" hTextAlign="Center" vTextAlign="Middle">
+			<expression><![CDATA[$P{PAYER_NAME}]]></expression>
+		</element>
+		<element kind="textField" uuid="3563f284-d7ed-49f4-a754-8054072e55e2" x="113" y="156" width="79" height="14" hTextAlign="Left" vTextAlign="Middle">
+			<expression><![CDATA[$P{MEMBER_NO}]]></expression>
+		</element>
+		<element kind="textField" uuid="9ba4a472-6b79-49c2-b355-8ecd82501ab2" x="117" y="236" width="93" height="16" hTextAlign="Left" vTextAlign="Middle">
+			<expression><![CDATA[$P{RECEIPT_NO}]]></expression>
+		</element>
+		<element kind="textField" uuid="dacb19da-c9b2-4327-8a2e-e5ef5bfd9698" x="352" y="118" width="83" height="19" blankWhenNull="true" hTextAlign="Center">
+			<expression><![CDATA[$P{REGISTRATION_FEE}]]></expression>
+		</element>
+		<element kind="textField" uuid="1c635cef-266d-40a2-91dd-eaa86fc2f828" x="345" y="159" width="96" height="19" blankWhenNull="true" hTextAlign="Center">
+			<expression><![CDATA[$P{MEMBERSHIP_DUE_AMOUNT}]]></expression>
+		</element>
+		<element kind="textField" uuid="5ec44958-46cf-40fa-b697-d83b99f58554" x="192" y="158" width="86" height="20" fontName="新細明體" hTextAlign="Center">
+			<expression><![CDATA[$P{MEMBERSHIP_DUE_YEAR_TEXT}]]></expression>
+		</element>
+		<element kind="textField" uuid="8eb36b4c-3ec0-4c91-a9b3-22222ee1c2ce" x="360" y="235" width="144" height="24" blankWhenNull="true" hTextAlign="Center" vTextAlign="Middle">
+			<expression><![CDATA[$P{TOTAL_AMOUNT}]]></expression>
+		</element>
+		<element kind="textField" uuid="65cd51bd-a4f9-4439-8c72-b88ac6321a05" x="391" y="384" width="50" height="17" hTextAlign="Center" vTextAlign="Middle">
+			<expression><![CDATA[$P{PAID_ROC_YEAR}]]></expression>
+		</element>
+		<element kind="textField" uuid="777f15ce-f6a3-4847-af90-6832a1f3854f" x="453" y="384" width="37" height="17" hTextAlign="Center" vTextAlign="Middle">
+			<expression><![CDATA[$P{PAID_MONTH}]]></expression>
+		</element>
+		<element kind="textField" uuid="b8fad280-3fef-4b7b-bf9a-74a71e4cc4fd" x="500" y="384" width="37" height="17" hTextAlign="Center" vTextAlign="Middle">
+			<expression><![CDATA[$P{PAID_DAY}]]></expression>
+		</element>
+		<element kind="textField" uuid="20c9329d-3f73-4477-8c8c-31209ad00efa" x="360" y="70" width="100" height="30" forecolor="#FA1A16" hTextAlign="Center" vTextAlign="Middle">
+			<expression><![CDATA[$P{SERIAL_NO}]]></expression>
+		</element>
+		<property name="com.jaspersoft.studio.unit.height" value="px"/>
+	</title>
+</jasperReport>

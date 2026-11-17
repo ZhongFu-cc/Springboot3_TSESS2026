@@ -70,6 +70,18 @@ public class MemberReceiptManager {
 	 */
 	private final String RECEIPT_TEMPLATE_BG_PATH = "jasperTemplate/TSESS_Receipt_Customer-Copy.png";
 
+	/**
+	 * 收據流水號的前綴<br>
+	 * 學會的收據本是 "E-" 開頭, 後面接流水號, 例如 E-5606
+	 */
+	private static final String RECEIPT_SERIAL_NO_PREFIX = "E-";
+
+	/**
+	 * 收據流水號的最小位數<br>
+	 * 本屆由 5606 起編, 本來就是 4 位數, 這裡補零只是保險, 不會改變 5606 以後的呈現
+	 */
+	private static final String RECEIPT_SERIAL_NO_FORMAT = "%04d";
+
 	private final MemberService memberService;
 	private final AttendeesService attendeesService;
 	private final OrdersService ordersService;
@@ -168,6 +180,12 @@ public class MemberReceiptManager {
 
 		receipt.setReceiptNo(attendees == null ? null : StringUtils.trimToNull(attendees.getReceiptNo()));
 
+		// 4-1.收據流水號取自與會者的流水序號 (attendees.sequence_no), 加上 "E-" 前綴,
+		// 本屆由 5606 起編, 之後新增的與會者會沿用 MAX(sequence_no) + 1 往下加;
+		// 尚未進入與會者表 (未繳費) 的人拿不到收據, 這裡理論上不會是 null , 仍然留白處理
+		receipt.setSequenceNo(attendees == null ? null : attendees.getSequenceNo());
+		receipt.setSerialNo(this.toReceiptSerialNo(receipt.getSequenceNo()));
+
 		// 5.繳款人姓名, 收據是中文版面, 優先用中文姓名, 外籍會員沒有中文名才退回英文姓名
 		receipt.setPayerName(this.resolvePayerName(member));
 
@@ -213,7 +231,7 @@ public class MemberReceiptManager {
 	 * 不需要資料源 (用 JREmptyDataSource)
 	 * <p>
 	 * 可用的 key:<br>
-	 * RECEIPT_NO / PAYER_NAME / MEMBER_NO / TAX_ID<br>
+	 * RECEIPT_NO / SERIAL_NO / PAYER_NAME / MEMBER_NO / TAX_ID<br>
 	 * REGISTRATION_FEE / MEMBERSHIP_DUE_YEAR_TEXT / MEMBERSHIP_DUE_AMOUNT /
 	 * TOTAL_AMOUNT<br>
 	 * PAID_ROC_YEAR / PAID_MONTH / PAID_DAY
@@ -237,6 +255,7 @@ public class MemberReceiptManager {
 		// 字串欄位一律以空字串代替 null , 模板的 textField 沒設 blankWhenNull 時,
 		// 傳 null 會在收據上印出 "null" 四個字
 		parameters.put("RECEIPT_NO", this.blankIfNull(receipt.getReceiptNo()));
+		parameters.put("SERIAL_NO", this.blankIfNull(receipt.getSerialNo()));
 		parameters.put("PAYER_NAME", this.blankIfNull(receipt.getPayerName()));
 		parameters.put("MEMBER_NO", this.blankIfNull(receipt.getMemberNo()));
 		parameters.put("TAX_ID", this.blankIfNull(receipt.getTaxId()));
@@ -262,6 +281,18 @@ public class MemberReceiptManager {
 	 */
 	private String blankIfNull(String value) {
 		return value == null ? "" : value;
+	}
+
+	/**
+	 * 與會者流水序號 → 收據流水號<br>
+	 * 例如 5606 會得到 "E-5606" , 序號為 null 時回傳 null , 讓收據上該格留白
+	 *
+	 * @param sequenceNo
+	 * @return
+	 */
+	private String toReceiptSerialNo(Integer sequenceNo) {
+		return sequenceNo == null ? null
+				: RECEIPT_SERIAL_NO_PREFIX + String.format(RECEIPT_SERIAL_NO_FORMAT, sequenceNo);
 	}
 
 	/**
